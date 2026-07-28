@@ -1,0 +1,16 @@
+fastapi
+uvicorn
+sqlalchemy
+psycopg2-binary
+python-dotenv
+google-cloud-storage
+supabase
+python-jose
+fpdf2
+google-adk
+google-cloud-aiplatform
+vertexai
+apscheduler
+httpx==0.27.0
+h2==4.1.0
+hyperframe==6.0.1
