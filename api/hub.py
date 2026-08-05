@@ -1,16 +1,18 @@
-import json
-
 from fastapi import APIRouter, Depends, HTTPException
 from google.adk.cli.utils.common import BaseModel
 from sqlalchemy.orm import Session
 
 from agents.runner import run_agent
+from agents import job_manager
+from agents.application_flow import start_proposal_generation, save_draft
+from agents.ag3_outline import outline_agent
+from agents.ag4_proposal import proposal_agent
 from database import get_db
-from models import ApplicationTracker, Grant, VaultDocument, ApplicationChat
+from models import ApplicationTracker, ApplicationChat
 from auth import verify_token
 from datetime import datetime, timezone
 
-from storage import get_signed_url, GCS_BUCKET_AGENT, upload_file
+from storage import get_signed_url, download_text, GCS_BUCKET_AGENT
 
 router = APIRouter(
     prefix="/hub",
@@ -32,6 +34,7 @@ def get_applications(
     return [
         {
             "id": str(app.id),
+            "grant_id": str(app.grant_id),
             "grant_name": app.grant.name,
             "grant_amount": app.grant.amount,
             "grant_deadline": str(app.grant.deadline),
@@ -65,52 +68,34 @@ async def approve_outline(
     application.status = "proposal_in_progress"
     db.commit()
 
-    # pull outline from GCS and trigger AG4
-    vault_docs = db.query(VaultDocument).filter_by(user_id=user_id).all()
-    vault_context = [
-        {"name": doc.name, "tag": doc.tag, "gcs_path": doc.gcs_path}
-        for doc in vault_docs
-    ]
+    start_proposal_generation(application, user_id)
 
-    prompt = f"""
-            The user has approved the proposal outline.
-            Outline is stored at: {application.outline_gcs_path}
-
-            Now write the full grant proposal and budget.
-            Grant: {application.grant.name}
-            Organization vault documents: {json.dumps(vault_context)}
-
-            Return proposal text and itemized budget.
-        """
-
-    try:
-        response, _ = await run_agent(
-            prompt=prompt,
-            user_id=user_id,
-            session_id=str(application.id)
-        )
-
-        # save proposal to GCS
-        proposal_path = f"applications/{user_id}/{application.id}/proposal.json"
-        upload_file(
-            contents=response.encode(),
-            destination_path=proposal_path,
-            bucket_name=GCS_BUCKET_AGENT,
-            content_type="application/json"
-        )
-
-        application.proposal_gcs_path = proposal_path
-        application.status = "proposal_review"
-
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Agent failed: {str(e)}")
-
-    db.commit()
     return {
         "application_id": str(application.id),
         "status": application.status,
-        "proposal_gcs_path": application.proposal_gcs_path
     }
+
+@router.post("/{application_id}/cancel")
+async def cancel_application_job(
+    application_id: str,
+    db: Session = Depends(get_db),
+    user_id: str = Depends(verify_token)
+):
+    application = db.query(ApplicationTracker).filter_by(
+        id=application_id,
+        user_id=user_id
+    ).first()
+
+    if not application:
+        raise HTTPException(status_code=404, detail="Application not found")
+
+    if application.status not in ("outline_in_progress", "proposal_in_progress"):
+        raise HTTPException(status_code=400, detail="Application has no active agent job to cancel")
+
+    if not job_manager.cancel_job(application_id):
+        raise HTTPException(status_code=400, detail="Job is not currently active on this server")
+
+    return {"application_id": application_id, "status": "cancelling"}
 
 @router.post("/{application_id}/approve-proposal")
 def approve_proposal(
@@ -181,12 +166,44 @@ def get_application(
         "grant_name": app.grant.name,
         "grant_amount": app.grant.amount,
         "status": app.status,
-        "output_gcs_path": app.output_gcs_path,
+        "outline_gcs_path": app.outline_gcs_path,
+        "proposal_gcs_path": app.proposal_gcs_path,
+        "budget_gcs_path": app.budget_gcs_path,
         "agent_run_id": str(app.agent_run_id) if app.agent_run_id else None,
         "started_at": str(app.started_at),
         "submitted_at": str(app.submitted_at) if app.submitted_at else None
     }
 
+
+@router.get("/{application_id}/content")
+def get_application_content(
+    application_id: str,
+    db: Session = Depends(get_db),
+    user_id: str = Depends(verify_token)
+):
+    """Return the agent-drafted text for whichever stage this application is
+    currently at, so the user can actually read what was produced."""
+    application = db.query(ApplicationTracker).filter_by(
+        id=application_id,
+        user_id=user_id
+    ).first()
+
+    if not application:
+        raise HTTPException(status_code=404, detail="Application not found")
+
+    if application.status in ("proposal_review", "pending", "submitted", "proposal_in_progress") and application.proposal_gcs_path:
+        gcs_path, kind = application.proposal_gcs_path, "proposal"
+    elif application.outline_gcs_path:
+        gcs_path, kind = application.outline_gcs_path, "outline"
+    else:
+        return {"kind": None, "content": None}
+
+    try:
+        content = download_text(gcs_path=gcs_path, bucket_name=GCS_BUCKET_AGENT)
+    except Exception as e:
+        raise HTTPException(status_code=502, detail=f"Failed to read draft from storage: {str(e)}")
+
+    return {"kind": kind, "content": content}
 
 @router.post("/{application_id}/chat")
 async def chat_with_agent(
@@ -212,37 +229,52 @@ async def chat_with_agent(
     ))
     db.commit()
 
+    # which draft is actually open for editing is determined by the
+    # application's current stage, not by asking an agent to guess intent
+    if application.status == "outline_review":
+        stage, agent, gcs_path = "outline", outline_agent, application.outline_gcs_path
+        title = f"Proposal Outline — {application.grant.name}"
+    elif application.status == "proposal_review":
+        stage, agent, gcs_path = "proposal", proposal_agent, application.proposal_gcs_path
+        title = f"Grant Proposal — {application.grant.name}"
+    else:
+        reply = "There's no draft currently open for edits at this stage."
+        db.add(ApplicationChat(application_id=application_id, user_id=user_id, role="agent", message=reply))
+        db.commit()
+        return {"response": reply}
+
+    try:
+        current_draft = download_text(gcs_path=gcs_path, bucket_name=GCS_BUCKET_AGENT) if gcs_path else ""
+    except Exception:
+        current_draft = ""
+
     prompt = f"""
-        You are helping with an active grant application.
-        Application ID: {application_id}
-        Grant: {application.grant.name}
-        Current status: {application.status}
-        Outline: {application.outline_gcs_path}
-        Proposal: {application.proposal_gcs_path}
+        Here is the current {stage} for this grant application:
+        {current_draft}
 
-        User message: {body.message}
+        The user has requested this change:
+        {body.message}
 
-        Understand what the user wants changed and call the appropriate agent.
-        If they want outline changes, call proposal_outline_agent.
-        If they want proposal or budget changes, call proposal_writing_agent.
+        Revise the {stage} accordingly and return the complete, updated
+        version in the same JSON shape as before.
     """
 
+    # call the sub-agent directly (not master_agent) so its raw JSON output
+    # stays internal — it's meant for storage, never for display to the user
     response, _ = await run_agent(
         prompt=prompt,
         user_id=user_id,
-        session_id=str(application.id)
+        session_id=str(application.id),
+        agent=agent
     )
 
-    # save agent response
-    db.add(ApplicationChat(
-        application_id=application_id,
-        user_id=user_id,
-        role="agent",
-        message=response
-    ))
+    save_draft(response, gcs_path, stage, title)
+
+    reply = f"I've updated the {stage} based on your request — you can review the changes above."
+    db.add(ApplicationChat(application_id=application_id, user_id=user_id, role="agent", message=reply))
     db.commit()
 
-    return {"response": response}
+    return {"response": reply}
 
 @router.get("/{application_id}/chat")
 def get_chat_history(
@@ -274,6 +306,7 @@ def get_chat_history(
 @router.get("/{application_id}/download")
 def download_output(
     application_id: str,
+    kind: str = "proposal",
     db: Session = Depends(get_db),
     user_id: str = Depends(verify_token)
 ):
@@ -285,12 +318,28 @@ def download_output(
     if not application:
         raise HTTPException(status_code=404, detail="Application not found")
 
-    if not application.proposal_gcs_path:
-        raise HTTPException(status_code=404, detail="No proposal available yet")
+    if kind == "outline":
+        if application.status in ("outline_in_progress", "outline_review"):
+            raise HTTPException(status_code=400, detail="Outline is not approved yet")
+        gcs_path = application.outline_gcs_path
 
+    elif kind in ("proposal", "budget"):
+        if application.status not in ("pending", "submitted"):
+            raise HTTPException(status_code=400, detail=f"{kind.capitalize()} is not approved yet")
+        gcs_path = application.proposal_gcs_path if kind == "proposal" else application.budget_gcs_path
+
+    else:
+        raise HTTPException(status_code=400, detail="Invalid kind")
+
+    if not gcs_path:
+        raise HTTPException(status_code=404, detail=f"No {kind} available")
+
+    # generation always saves a rendered PDF alongside the raw JSON at the
+    # same path with a .pdf extension — sign that instead of the raw blob
+    pdf_path = gcs_path.rsplit(".", 1)[0] + ".pdf"
     url = get_signed_url(
-        gcs_path=application.proposal_gcs_path,
+        gcs_path=pdf_path,
         bucket_name=GCS_BUCKET_AGENT,
         expiration_minutes=30
     )
-    return {"download_url": url}
+    return {"download_url": url, "kind": kind}

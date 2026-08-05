@@ -4,11 +4,17 @@ from fastapi import APIRouter, Depends, Query, UploadFile, File, HTTPException
 from sqlalchemy.orm import Session
 
 from agents.runner import run_agent
+from agents.ag2_evaluation import evaluation_agent
+from agents.ag3_outline import outline_agent
+from agents.application_flow import start_application
+from utils.limits import check_can_apply, check_agent_runs
 from database import get_db
-from models import UserGrant, Grant, User, ApplicationTracker, VaultDocument
+from models import UserGrant, Grant, User, VaultDocument
 from auth import verify_token
 from storage import upload_file, get_signed_url, GCS_BUCKET_AGENT, GCS_BUCKET_VAULT
 from utils.pdf_generator import generate_grants_pdf
+from utils.limits import get_feed_limit
+from utils.parsing import extract_json, parse_deadline
 from typing import Optional
 from uuid import UUID
 import uuid
@@ -18,6 +24,8 @@ router = APIRouter(
     tags=["feeds"]
 )
 
+VALID_FIT_CATEGORIES = {"prime_match", "moderate_fit", "low_probability"}
+
 @router.get("/")
 def get_feeds(
     amount: Optional[str] = Query(None),
@@ -25,7 +33,10 @@ def get_feeds(
     db: Session = Depends(get_db),
     user_id: str = Depends(verify_token)
 ):
-    query = db.query(UserGrant).filter_by(UserGrant.user_id == user_id)
+    user = db.query(User).filter_by(id=user_id).first()
+    limit = get_feed_limit(user)
+
+    query = db.query(UserGrant).filter(UserGrant.user_id == user_id)
 
     if amount:
         query = query.join(Grant).filter(Grant.amount == amount)
@@ -35,9 +46,9 @@ def get_feeds(
     results = query.all()
 
     feed = {
-        "recommended": [],
-        "strong_fit": [],
-        "not_qualified": []
+        "prime_match": [],
+        "moderate_fit": [],
+        "low_probability": []
     }
 
     for ug in results:
@@ -47,10 +58,82 @@ def get_feeds(
             "amount": ug.grant.amount,
             "deadline": str(ug.grant.deadline),
             "link": ug.grant.link,
-            "applied": ug.applied
+            "applied": ug.applied,
+            "description": ug.grant.description,
+            "details": ug.grant.details,
         })
 
-    return feed
+    # limit feed display for free users
+    if limit is not None:
+        total = []
+        for category in feed:
+            total.extend(feed[category])
+        limited = total[:limit]
+        feed = {
+        "prime_match": [],
+        "moderate_fit": [],
+        "low_probability": []
+        }
+        for item in limited:
+            feed[item["fit_category"]].append(item)
+
+    return {**feed, "is_limited": limit is not None}
+
+@router.post("/refresh")
+async def refresh_feed(
+    db: Session = Depends(get_db),
+    user_id: str = Depends(verify_token)
+):
+    # Evaluate any agent-discovered grants this user hasn't been scored against yet.
+    already_scored = db.query(UserGrant.grant_id).filter(UserGrant.user_id == user_id)
+    new_grants = db.query(Grant).filter(
+        Grant.source == "agent_discovered",
+        ~Grant.id.in_(already_scored)
+    ).all()
+
+    if not new_grants:
+        return {"evaluated": 0, "message": "No new grants to evaluate"}
+
+    vault_docs = db.query(VaultDocument).filter_by(user_id=user_id).all()
+    vault_context = [
+        {"name": doc.name, "tag": doc.tag, "gcs_path": doc.gcs_path}
+        for doc in vault_docs
+    ]
+
+    evaluated_count = 0
+    for grant in new_grants:
+        prompt = f"""
+            Grant details:
+            Name: {grant.name}
+            Amount: {grant.amount}
+            Deadline: {grant.deadline}
+            Description: {grant.description}
+            Link: {grant.link}
+            Eligibility requirements: {(grant.details or {}).get('eligibility_requirements', 'not available')}
+            Restrictions: {(grant.details or {}).get('restrictions', 'not available')}
+            Required documents: {(grant.details or {}).get('required_documents', 'not available')}
+
+            Organization vault documents available:
+            {json.dumps(vault_context)}
+
+            Return JSON with:
+            - fit_category: prime_match | moderate_fit | low_probability
+            - reason: brief explanation
+        """
+        try:
+            response, _ = await run_agent(prompt, user_id=user_id, agent=evaluation_agent)
+            result = extract_json(response)
+            fit_category = result.get("fit_category")
+            if fit_category not in VALID_FIT_CATEGORIES:
+                break
+        except Exception:
+            fit_category = "low_probability"
+
+        db.add(UserGrant(user_id=user_id, grant_id=grant.id, fit_category=fit_category))
+        evaluated_count += 1
+
+    db.commit()
+    return {"evaluated": evaluated_count}
 
 @router.post("/submit")
 async def submit_grant(
@@ -68,8 +151,14 @@ async def submit_grant(
     db.refresh(grant)
 
     gcs_path = None
+    file_bytes = None
+    file_mimetype = None
     if file:
         contents = await file.read()
+        if len(contents) > 15 * 1024 * 1024:
+            raise HTTPException(status_code=400, detail="Too large. Maximum file size is 15MB.")
+        file_bytes = contents
+        file_mimetype = file.content_type
         gcs_path = f"user-vault/{user_id}/grants/{uuid.uuid4()}_{file.filename}"
         upload_file(
             contents=contents,
@@ -77,30 +166,50 @@ async def submit_grant(
             bucket_name=GCS_BUCKET_VAULT,
             content_type=file.content_type
         )
+        grant.gcs_path = gcs_path
+        db.commit()
 
     prompt = f"""
         Evaluate this grant for the user:
         Grant name: {name}
         Grant link: {link or 'not provided'}
-        Grant document: {gcs_path or 'not provided'}
-        
-        Check the organization's vault documents and evaluate fit.
+        {('A supporting document was uploaded for this grant, but its contents are not readable by you '
+          '— evaluate on name, link, and vault documents only.') if file_bytes else 'No supporting document was uploaded.'}
+
+        Access the grant link or file document and Check the organization's vault documents and evaluate fit.
         Return JSON with:
-        - fit_category: recommended | strong_fit | not_qualified
+        - fit_category: prime_match | moderate_fit | low_probability
         - reason: brief explanation
         - amount: grant amount if found
         - deadline: grant deadline if found
         - description: brief grant description
+        - eligibility_requirements: eligibility requirements if found
+        - restrictions: restrictions such as word limits if found
+        - required_documents: required documents if found
     """
 
     try:
-        response = await run_agent(prompt, user_id=user_id)
-        result = json.loads(response)
+        response, _ = await run_agent(
+            prompt,
+            user_id=user_id,
+            agent=evaluation_agent,
+            file_bytes=file_bytes,
+            file_mimetype=file_mimetype,
+        )
+        result = extract_json(response)
 
         # update grant with evaluated result details
         grant.amount = result.get("amount")
         grant.description = result.get("description")
-        fit_category = result.get("fit_category", "not_qualified")
+        grant.deadline = parse_deadline(result.get("deadline"))
+        grant.details = {
+            "eligibility_requirements": result.get("eligibility_requirements"),
+            "restrictions": result.get("restrictions"),
+            "required_documents": result.get("required_documents"),
+        }
+        fit_category = result.get("fit_category")
+        if fit_category not in VALID_FIT_CATEGORIES:
+            fit_category = "low_probability"
 
         # save to user_grants
         user_grant = UserGrant(
@@ -113,13 +222,19 @@ async def submit_grant(
 
         # auto trigger application if fit
         application = None
-        if fit_category in ["recommended", "strong_fit"]:
+        if fit_category in ["prime_match", "moderate_fit", "low_probability"]:
             application = await start_application(grant, user_id, db)
             user_grant.applied = True
             db.commit()
 
     except Exception as e:
-        # still save the grant even if agent fails
+        # evaluation failed — still surface the grant on the feed instead of
+        # silently dropping it (it just won't have a real fit assessment)
+        db.add(UserGrant(
+            user_id=user_id,
+            grant_id=grant.id,
+            fit_category="low_probability",
+        ))
         db.commit()
         return {
             "grant_id": str(grant.id),
@@ -129,7 +244,7 @@ async def submit_grant(
     return {
         "grant_id": str(grant.id),
         "fit_category": fit_category,
-        "status": application.status if application else "not_qualified",
+        "status": application.status if application else "low_probability",
         "application_id": str(application.id) if application else None,
         "message": "Grant evaluated and application started" if application else "Grant saved but not qualified for application"
     }
@@ -140,6 +255,10 @@ async def apply_for_grant(
     db: Session = Depends(get_db),
     user_id: str = Depends(verify_token)
 ):
+    user = db.query(User).filter_by(id=user_id).first()
+    check_can_apply(user)
+    check_agent_runs(user)
+
     grant = db.query(Grant).filter_by(id=grant_id).first()
     if not grant:
         raise HTTPException(status_code=404, detail="Grant not found")
@@ -153,8 +272,10 @@ async def apply_for_grant(
     if not user_grant:
         raise HTTPException(status_code=404, detail="Grant not found on your feed")
 
-
-    application = await start_application(grant, user_id, db)
+    try:
+        application = await start_application(grant, user_id, db)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Agent failed: {str(e)}")
 
     user_grant.applied = True
     db.commit()
@@ -165,6 +286,7 @@ async def apply_for_grant(
         "grant_id": grant_id,
         "outline_gcs_path": application.outline_gcs_path
     }
+
 
 @router.get("/export")
 def export_grants(
@@ -179,7 +301,7 @@ def export_grants(
         UserGrant.user_id == user_id
     ).all()
 
-    feed = {"recommended": [], "strong_fit": [], "not_qualified": []}
+    feed = {"prime_match": [], "moderate_fit": [], "low_probability": []}
     for ug in results:
         feed[ug.fit_category].append({
             "name": ug.grant.name,
@@ -207,55 +329,3 @@ def export_grants(
         expiration_minutes=30
     )
     return {"download_url": url}
-
-async def start_application(grant, user_id: str, db: Session):
-    application = ApplicationTracker(
-        user_id=user_id,
-        grant_id=grant.id,
-        status="outline_in_progress"
-    )
-    db.add(application)
-    db.commit()
-    db.refresh(application)
-
-    # pull vault documents for context
-    vault_docs = db.query(VaultDocument).filter_by(user_id=user_id).all()
-    vault_context = [
-        {"name": doc.name, "tag": doc.tag, "gcs_path": doc.gcs_path}
-        for doc in vault_docs
-    ]
-
-    # trigger ag3
-    prompt = f"""
-        Start application flow for this grant:
-        Grant: {grant.name}
-        Amount: {grant.amount}
-        Deadline: {grant.deadline}
-        Description: {grant.description}
-        Link: {grant.link}
-        
-        Organization vault documents available:
-        {json.dumps(vault_context)}
-
-        Generate a proposal outline.
-    """
-
-    response, _ = await run_agent(
-        prompt=prompt,
-        user_id=user_id,
-        session_id=str(application.id)
-    )
-
-    outline_path = f"applications/{user_id}/{application.id}/outline.json"
-    upload_file(
-        contents=response.encode(),
-        destination_path=outline_path,
-        bucket_name=GCS_BUCKET_VAULT,
-        content_type="application/json"
-    )
-
-    application.output_gcs_path = outline_path
-    application.status = "outline_review"
-    db.commit()
-
-    return application

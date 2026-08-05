@@ -50,3 +50,8 @@ def delete_file(gcs_path: str, bucket_name: str):
     bucket = client.bucket(bucket_name)
     blob = bucket.blob(gcs_path)
     blob.delete()
+
+def download_text(gcs_path: str, bucket_name: str) -> str:
+    bucket = client.bucket(bucket_name)
+    blob = bucket.blob(gcs_path)
+    return blob.download_as_text()

@@ -17,9 +17,15 @@ class User(Base):
     id = Column(UUID(as_uuid=True), primary_key=True)
     full_name = Column(String)
     email = Column(String)
+    organization_type = Column(Enum("Non-profit/NGO", "Research Lab", "SME", "Early-stage Startup", "Academic Institution", "Independent Specialist", name="org_type"), nullable=False)
+    area_of_focus = Column(String)
     storage_used_bytes = Column(BigInteger, default=0)
     storage_limit_bytes = Column(BigInteger, default=524288000)
-    plan = Column(Enum("basic", "pro", "enterprise", name="user_plan"), default="basic")
+    # plan tiers map to the pricing page as: basic=Starter, pro=Pro, enterprise=Agency/Consultant
+    plan = Column(Enum("free", "basic", "pro", "enterprise", name="user_plan"), default="basic")
+    subscription_status = Column(String, nullable=True)  # trialing, active, past_due, unpaid, canceled, paused
+    bachs_customer_id = Column(String, nullable=True)
+    bachs_subscription_id = Column(String, nullable=True)
     created_at = Column(DateTime(timezone=True), default=utcnow)
 
 class AgentRun(Base):
@@ -27,7 +33,7 @@ class AgentRun(Base):
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     user_id = Column(UUID(as_uuid=True), ForeignKey("public.users.id"), nullable=True)
-    status = Column(Enum("pending", "running", "done", "failed", name="run_status"), default="pending")
+    status = Column(Enum("pending", "running", "done", "failed", "cancelled", name="run_status"), default="pending")
     triggered_at = Column(DateTime(timezone=True), default=utcnow)
     completed_at = Column(DateTime(timezone=True), nullable=True)
 
@@ -51,6 +57,8 @@ class Grant(Base):
     amount = Column(String, nullable=True)
     deadline = Column(DateTime(timezone=True), nullable=True)
     description = Column(Text, nullable=True)
+    details = Column(JSONB, nullable=True)  # eligibility_requirements, restrictions, required_documents from AG1
+    gcs_path = Column(String, nullable=True)
     source = Column(
         Enum("agent_discovered", "user_submitted", name="grant_source"),
         nullable=False
@@ -64,7 +72,7 @@ class UserGrant(Base):
     user_id = Column(UUID(as_uuid=True), ForeignKey("public.users.id"), nullable=False)
     grant_id = Column(UUID(as_uuid=True), ForeignKey("grants.id"), nullable=False)
     fit_category = Column(
-        Enum("recommended", "strong_fit", "not_qualified", name="fit_category"),
+        Enum("prime_match", "moderate_fit", "low_probability", name="fit_category"),
         nullable=False
     )
     agent_run_id = Column(UUID(as_uuid=True), nullable=True)
@@ -105,6 +113,8 @@ class ApplicationTracker(Base):
             "proposal_in_progress",
             "proposal_review",
             "submitted",
+            "failed",
+            "cancelled",
             name="application_status"
         ),
         default="pending"
@@ -118,6 +128,17 @@ class ApplicationTracker(Base):
 
     grant = relationship("Grant", backref="applications")
     agent_run = relationship("AgentRun", backref="applications")
+
+class Notification(Base):
+    __tablename__ = "notifications"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    user_id = Column(UUID(as_uuid=True), ForeignKey("public.users.id"), nullable=False)
+    type = Column(Enum("success", "failure", "info", name="notification_type"), nullable=False)
+    title = Column(String, nullable=False)
+    message = Column(Text, nullable=True)
+    read_at = Column(DateTime(timezone=True), nullable=True)
+    created_at = Column(DateTime(timezone=True), default=utcnow)
 
 class ApplicationChat(Base):
     __tablename__ = "application_chats"

@@ -2,9 +2,38 @@ from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 from database import get_db
 from models import User, UserGrant, ApplicationTracker, VaultDocument
-from auth import verify_token
+from auth import verify_token, get_current_supabase_user
+from utils.email_client import send_welcome_email
 
 router = APIRouter(prefix="/dashboard", tags=["dashboard"])
+
+profile_router = APIRouter(prefix="/user", tags=["user"])
+
+
+@profile_router.post("/me")
+async def ensure_profile(
+    db: Session = Depends(get_db),
+    supabase_user=Depends(get_current_supabase_user)
+):
+    user = db.query(User).filter_by(id=supabase_user.id).first()
+    if not user:
+        user = User(
+            id=supabase_user.id,
+            email=supabase_user.email,
+            full_name=(supabase_user.user_metadata or {}).get("full_name"),
+        )
+        db.add(user)
+        db.commit()
+        db.refresh(user)
+
+        await send_welcome_email(user.email, user.full_name)
+
+    return {
+        "id": str(user.id),
+        "full_name": user.full_name,
+        "email": user.email,
+        "plan": user.plan,
+    }
 
 
 @router.get("/")

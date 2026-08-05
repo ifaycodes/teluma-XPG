@@ -5,6 +5,7 @@ from models import VaultDocument, User
 from auth import verify_token
 from storage import upload_file, get_signed_url, delete_file, GCS_BUCKET_VAULT
 import uuid
+from utils.limits import check_vault_limit
 
 router = APIRouter(
     prefix="/vault",
@@ -52,6 +53,11 @@ async def upload_document(
     db: Session = Depends(get_db),
     user_id: str = Depends(verify_token)
 ):
+
+    user = db.query(User).filter_by(id=user_id).first()
+    doc_count = db.query(VaultDocument).filter_by(user_id=user_id).count()
+    check_vault_limit(user, doc_count)
+
     # get memory size by reading file into memory
     contents = await file.read()
     file_size = len(contents)
