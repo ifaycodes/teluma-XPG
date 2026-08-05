@@ -1,0 +1,9 @@
+@import "tailwindcss";
+@config "../tailwind.config.ts";
+
+:root {
+  --primary: #0F172A;
+  --secondary: #10B981;
+  --tertiary: #3B82F6;
+}
+
