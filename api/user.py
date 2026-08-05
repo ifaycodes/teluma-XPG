@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from database import get_db
 from models import User, UserGrant, ApplicationTracker, VaultDocument
@@ -17,10 +17,13 @@ async def ensure_profile(
 ):
     user = db.query(User).filter_by(id=supabase_user.id).first()
     if not user:
+        metadata = supabase_user.user_metadata or {}
         user = User(
             id=supabase_user.id,
             email=supabase_user.email,
-            full_name=(supabase_user.user_metadata or {}).get("full_name"),
+            full_name=metadata.get("full_name"),
+            organization_type=metadata.get("organization_type"),
+            area_of_focus=metadata.get("area_of_focus"),
         )
         db.add(user)
         db.commit()
@@ -33,7 +36,26 @@ async def ensure_profile(
         "full_name": user.full_name,
         "email": user.email,
         "plan": user.plan,
+        "plan_selected": user.plan_selected,
     }
+
+
+@profile_router.post("/select-free")
+def select_free_plan(
+    db: Session = Depends(get_db),
+    user_id: str = Depends(verify_token),
+):
+    """The free-trial choice from the plan picker — paid tiers go through
+    /billing/checkout instead, so this only ever sets the free plan."""
+    user = db.query(User).filter_by(id=user_id).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    user.plan = "free"
+    user.plan_selected = True
+    db.commit()
+
+    return {"plan": user.plan, "plan_selected": user.plan_selected}
 
 
 @router.get("/")

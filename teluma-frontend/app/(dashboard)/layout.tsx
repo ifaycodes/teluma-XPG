@@ -3,7 +3,9 @@ import { useEffect, useState } from 'react'
 import { useRouter, usePathname } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
 import Link from 'next/link'
+import api from '@/lib/api'
 import { NotificationBell } from '@/components/ui/NotificationBell'
+import { PlanPickerModal } from '@/components/ui/PlanPickerModal'
 
 const navItems = [
   { href: '/feed', label: 'Feed', icon: 'rss_feed' },
@@ -36,22 +38,37 @@ export default function DashboardLayout({
   const [user, setUser] = useState<any>(null)
   const [pinned, setPinned] = useState(false)
   const [hovering, setHovering] = useState(false)
+  const [planSelected, setPlanSelected] = useState<boolean | null>(null)
   const expanded = pinned || hovering
   const pageTitle = PAGE_TITLES.find(([path]) => pathname.startsWith(path))?.[1] ?? ''
 
   useEffect(() => {
-    supabase.auth.getSession().then(({ data }) => {
+    supabase.auth.getSession().then(async ({ data }) => {
       if (!data.session) {
         router.push('/login')
-      } else {
-        setUser(data.session.user)
+        return
+      }
+      setUser(data.session.user)
+      // idempotent — creates the public.users row on whichever page first
+      // sees an authenticated session (fresh signup, confirmed-email
+      // redirect, or a plain login all land here eventually)
+      try {
+        const res = await api.post('/user/me')
+        setPlanSelected(!!res.data.plan_selected)
+      } catch (err) {
+        console.error('Failed to sync profile:', err)
       }
     })
   }, [])
 
   async function handleSignOut() {
-    await supabase.auth.signOut()
-    router.push('/login')
+    try {
+      await supabase.auth.signOut()
+    } catch (err) {
+      console.error('Sign out request failed:', err)
+    } finally {
+      router.push('/login')
+    }
   }
 
   function closeSidebar() {
@@ -188,6 +205,10 @@ export default function DashboardLayout({
           )
         })}
       </nav>
+
+      {planSelected === false && (
+        <PlanPickerModal onResolved={() => setPlanSelected(true)} />
+      )}
 
     </div>
   )

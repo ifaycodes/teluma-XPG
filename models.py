@@ -17,12 +17,13 @@ class User(Base):
     id = Column(UUID(as_uuid=True), primary_key=True)
     full_name = Column(String)
     email = Column(String)
-    organization_type = Column(Enum("Non-profit/NGO", "Research Lab", "SME", "Early-stage Startup", "Academic Institution", "Independent Specialist", name="org_type"), nullable=False)
+    organization_type = Column(Enum("Non-profit/NGO", "Research Lab", "SME", "Early-stage Startup", "Academic Institution", "Independent Specialist", "Other", name="org_type"), nullable=True)
     area_of_focus = Column(String)
     storage_used_bytes = Column(BigInteger, default=0)
     storage_limit_bytes = Column(BigInteger, default=524288000)
     # plan tiers map to the pricing page as: basic=Starter, pro=Pro, enterprise=Agency/Consultant
-    plan = Column(Enum("free", "basic", "pro", "enterprise", name="user_plan"), default="basic")
+    plan = Column(Enum("free", "basic", "pro", "enterprise", name="user_plan"), default="free")
+    plan_selected = Column(Boolean, default=False)  # gates the dashboard until they pick free-trial or a paid plan
     subscription_status = Column(String, nullable=True)  # trialing, active, past_due, unpaid, canceled, paused
     bachs_customer_id = Column(String, nullable=True)
     bachs_subscription_id = Column(String, nullable=True)

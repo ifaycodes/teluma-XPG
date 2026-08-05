@@ -109,6 +109,7 @@ def _handle_checkout_completed(db: Session, data: dict):
     subscription = data.get("subscription") or {}
 
     user.plan = plan
+    user.plan_selected = True
     user.subscription_status = "active"
     if customer.get("customer_id"):
         user.bachs_customer_id = customer["customer_id"]

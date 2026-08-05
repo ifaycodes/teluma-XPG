@@ -4,49 +4,8 @@ import { useRouter } from 'next/navigation'
 import api from '@/lib/api'
 import { supabase } from '@/lib/supabase'
 import { DashboardData } from '@/lib/types'
+import { PLAN_TIERS } from '@/lib/plans'
 import { OFFSET, OFFSET_BTN } from '@/lib/theme'
-
-const PLAN_TIERS = [
-  {
-    id: 'basic',
-    name: 'Starter',
-    priceNgn: '₦12,000',
-    priceUsd: '$10 USD',
-    highlighted: false,
-    features: [
-      '5 AI-drafted proposals/mo',
-      'Full live discovery engine',
-      'Fit-scoring on all matches',
-      '20 core documents (500MB)',
-    ],
-  },
-  {
-    id: 'pro',
-    name: 'Pro',
-    priceNgn: '₦35,000',
-    priceUsd: '$25 USD',
-    highlighted: true,
-    features: [
-      'UNLIMITED AI-drafted proposals',
-      'Priority 24/7 discovery alerts',
-      'Full proposal history memory',
-      '100 core documents (2GB)',
-    ],
-  },
-  {
-    id: 'enterprise',
-    name: 'Agency / Consultant',
-    priceNgn: '₦120,000',
-    priceUsd: '$80 USD',
-    highlighted: false,
-    features: [
-      'UNLIMITED AI-drafted proposals',
-      'Multi-organization profiles (up to 5)',
-      'Exportable audit & compliance logs',
-      'Dedicated agent resource allocation',
-    ],
-  },
-] as const
 
 export default function SettingsPage() {
   const router = useRouter()
@@ -79,8 +38,13 @@ export default function SettingsPage() {
   }
 
   async function handleSignOut() {
-    await supabase.auth.signOut()
-    router.push('/login')
+    try {
+      await supabase.auth.signOut()
+    } catch (err) {
+      console.error('Sign out request failed:', err)
+    } finally {
+      router.push('/login')
+    }
   }
 
   async function handleUpgrade(plan: string) {
