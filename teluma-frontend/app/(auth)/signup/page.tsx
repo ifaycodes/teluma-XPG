@@ -148,6 +148,7 @@ export default function SignupPage() {
                   <option value="nonprofit">Non-Profit / NGO</option>
                   <option value="research_lab">Research Lab / Academic Institution</option>
                   <option value="startup">Early-Stage Startup</option>
+                  <option value="sme">SME Business</option>
                   <option value="consultant">Independent Consultant / Specialist</option>
                   <option value="other">Other</option>
                 </select>
