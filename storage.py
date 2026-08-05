@@ -1,3 +1,5 @@
+import json
+
 from google.cloud import storage
 from google.oauth2 import service_account
 import os
@@ -7,13 +9,12 @@ load_dotenv()
 
 GCS_BUCKET_VAULT = os.getenv("GCS_BUCKET_VAULT")
 GCS_BUCKET_AGENT = os.getenv("GCS_BUCKET_AGENT")
-GCS_CREDENTIALS_PATH = os.getenv("GCS_CREDENTIALS_PATH")
+GCS_CREDENTIALS = os.getenv("GOOGLE_APPLICATION_CREDENTIALS_JSON")
 
-if GCS_CREDENTIALS_PATH and os.path.exists(GCS_CREDENTIALS_PATH):
+if GCS_CREDENTIALS:
+    info = json.loads(GCS_CREDENTIALS)
     from google.oauth2 import service_account
-    credentials = service_account.Credentials.from_service_account_file(
-    GCS_CREDENTIALS_PATH
-    )
+    credentials = service_account.Credentials.from_service_account_file(info)
     client = storage.Client(credentials=credentials)
 else:
     # cloud deployment would use attached service account
