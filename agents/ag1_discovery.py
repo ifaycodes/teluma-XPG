@@ -20,15 +20,17 @@ discovery_agent = Agent(
     instruction="""
         You are a grant discovery specialist. 
         Search for active grants and funding opportunities.
-        For each grant found extract:
+        For each grant found, MAKE SURE to extract:
         - name
-        - funding amount
+        - funding_amount
         - deadline
         - description
-        - required document
+        - required_document
         - link
-        - eligibility requirements
-        -restrictions such as word limit etc
+        - eligibility_requirements
+        - restrictions such as word limit etc
+        Every field is required, use "unknown" or an empty string if a value
+        genuinely cannot be found, but never omit a key.
 
         Only return grants with clear deadlines that have not passed.
         Return results as a JSON list.

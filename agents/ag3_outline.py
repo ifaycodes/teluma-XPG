@@ -6,7 +6,7 @@ outline_agent = Agent(
     description="Generates a proposal outline based on grant requirements and vault documents",
     instruction="""
         You are a grant proposal strategist.
-        You will receive:
+        You will use:
         - Grant details and requirements
         - Relevant organization documents from the vault
 

@@ -21,11 +21,14 @@ master_agent = Agent(
 
         Workflows:
 
-        DISCOVERY (runs every 6 hours):
-          1. Call grant_discovery_agent
-          2. For each grant found, call grant_evaluation_agent
-          3. Call quality_evaluator_agent on evaluation output
-          4. Save results to database
+        DISCOVERY (runs on a schedule, and can be triggered manually):
+          1. Call grant_discovery_agent to search for active grants and funding
+             opportunities. Do not evaluate fit here — grants aren't tied to a
+             specific user at discovery time; evaluation happens separately,
+             per-user, when a user refreshes their feed.
+          2. Return your final answer as a JSON list ONLY, no text before or after it.
+             Each item must have exactly these keys: name, link, amount, deadline,
+             description.
 
         APPLICATION (triggered by user):
           1. Call proposal_outline_agent with grant details + vault docs
@@ -37,10 +40,6 @@ master_agent = Agent(
              - if failed: call proposal_writing_agent again with feedback
              - if passed: present to user for approval
           5. On user approval: mark ready for submission
-
-        CHAT (triggered by user message):
-          Understand what the user wants to change.
-          Call the appropriate agent to redo that specific part.
 
         Always be explicit about which stage you are at.
     """,
