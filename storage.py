@@ -14,7 +14,7 @@ GCS_CREDENTIALS = os.getenv("GOOGLE_APPLICATION_CREDENTIALS_JSON")
 if GCS_CREDENTIALS:
     info = json.loads(GCS_CREDENTIALS)
     from google.oauth2 import service_account
-    credentials = service_account.Credentials.from_service_account_file(info)
+    credentials = service_account.Credentials.from_service_account_info(info)
     client = storage.Client(credentials=credentials)
 else:
     # cloud deployment would use attached service account
