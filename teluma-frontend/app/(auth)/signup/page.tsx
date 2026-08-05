@@ -25,11 +25,16 @@ export default function SignupPage() {
       email,
       password,
       options: {
-        data: { 
+        data: {
           full_name: fullName,
           organization_type: organizationType,
           area_of_focus: areaOfFocus
         },
+        // without this, Supabase falls back to the project's "Site URL" —
+        // which is whatever it was set to at project creation, almost
+        // certainly still localhost. This makes it follow wherever the
+        // signup actually happened instead.
+        emailRedirectTo: `${window.location.origin}/login`,
       },
     })
 

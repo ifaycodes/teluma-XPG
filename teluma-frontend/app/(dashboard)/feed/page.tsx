@@ -197,6 +197,12 @@ export default function FeedPage() {
   const [dragOver, setDragOver] = useState(false)
   const [submitLoading, setSubmitLoading] = useState(false)
   const [selectedGrant, setSelectedGrant] = useState<Grant | null>(null)
+  const [toast, setToast] = useState<string | null>(null)
+
+  function showToast(message: string) {
+    setToast(message)
+    setTimeout(() => setToast(null), 5000)
+  }
   const fileInputRef = useRef<HTMLInputElement>(null)
 
   // filters
@@ -265,8 +271,10 @@ export default function FeedPage() {
       setSubmitForm({ name: '', link: '' })
       setSubmitFile(null)
       fetchFeed()
+      showToast('Grant added — it will appear in your feed shortly.')
     } catch (err) {
       console.error('Submit failed:', err)
+      alert('Failed to add grant. Please check the details and try again.')
     } finally {
       setSubmitLoading(false)
     }
@@ -526,6 +534,16 @@ export default function FeedPage() {
               </div>
             </form>
           </div>
+        </div>
+      )}
+
+      {toast && (
+        <div className={`fixed bottom-20 lg:bottom-6 left-1/2 -translate-x-1/2 flex items-center gap-3 bg-[#1C1C1C] text-[#FDFAF4] rounded-xl px-4 py-3 z-50 ${OFFSET}`}>
+          <span className="material-symbols-outlined text-[#FDFAF4]/70">check_circle</span>
+          <p className="text-sm">{toast}</p>
+          <button onClick={() => setToast(null)} className="text-[#FDFAF4]/50 hover:text-[#FDFAF4] flex-shrink-0">
+            <span className="material-symbols-outlined text-lg">close</span>
+          </button>
         </div>
       )}
 

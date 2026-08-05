@@ -1,6 +1,6 @@
 import json
 
-from fastapi import APIRouter, Depends, Query, UploadFile, File, HTTPException
+from fastapi import APIRouter, Depends, Query, UploadFile, File, Form, HTTPException
 from sqlalchemy.orm import Session
 
 from agents.runner import run_agent
@@ -137,8 +137,8 @@ async def refresh_feed(
 
 @router.post("/submit")
 async def submit_grant(
-    name: str,
-    link: Optional[str] = None,
+    name: str = Form(...),
+    link: Optional[str] = Form(None),
     file: Optional[UploadFile] = File(None),
     db: Session = Depends(get_db),
     user_id: str = Depends(verify_token)
