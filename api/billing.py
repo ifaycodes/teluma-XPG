@@ -1,9 +1,13 @@
 import json
+import logging
 import os
 
+import httpx
 from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
+
+logger = logging.getLogger(__name__)
 
 from auth import verify_token
 from database import get_db
@@ -49,6 +53,15 @@ async def start_checkout(
         )
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
+    except httpx.HTTPStatusError as e:
+        logger.error(f"Bachs checkout session creation failed: {e.response.status_code} — {e.response.text}")
+        raise HTTPException(
+            status_code=502,
+            detail="Payments aren't set up correctly yet — check BACHS_API_KEY and the BACHS_PRODUCT_* env vars."
+        )
+    except httpx.HTTPError as e:
+        logger.error(f"Bachs checkout session request failed: {e}")
+        raise HTTPException(status_code=502, detail="Could not reach the payments provider. Try again shortly.")
 
     return {"checkout_url": session["checkout_url"]}
 
@@ -62,7 +75,14 @@ async def open_billing_portal(
     if not user or not user.bachs_customer_id:
         raise HTTPException(status_code=400, detail="No billing account yet — subscribe to a plan first")
 
-    session = await create_portal_session(user.bachs_customer_id)
+    try:
+        session = await create_portal_session(user.bachs_customer_id)
+    except httpx.HTTPStatusError as e:
+        logger.error(f"Bachs portal session creation failed: {e.response.status_code} — {e.response.text}")
+        raise HTTPException(status_code=502, detail="Could not open the billing portal right now.")
+    except httpx.HTTPError as e:
+        logger.error(f"Bachs portal session request failed: {e}")
+        raise HTTPException(status_code=502, detail="Could not reach the payments provider. Try again shortly.")
     return {"portal_url": session["url"]}
 
 

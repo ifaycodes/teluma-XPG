@@ -54,6 +54,7 @@ def get_feeds(
     for ug in results:
         feed[ug.fit_category].append({
             "id": str(ug.grant.id),
+            "fit_category": ug.fit_category,
             "name": ug.grant.name,
             "amount": ug.grant.amount,
             "deadline": str(ug.grant.deadline),
