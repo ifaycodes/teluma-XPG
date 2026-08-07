@@ -21,7 +21,7 @@ def _get_client() -> AsyncSendByte:
 async def _send(to_email: str, subject: str, html: str, text: str, label: str) -> None:
     """Best-effort — a failed send should never block the caller's flow."""
     try:
-        await _get_client().emails.send(
+        await _get_client().send_email(
             from_=EMAIL_FROM,
             to=to_email,
             subject=subject,
