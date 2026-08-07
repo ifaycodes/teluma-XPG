@@ -14,6 +14,9 @@ export default function SettingsPage() {
   const [upgradingPlan, setUpgradingPlan] = useState<string | null>(null)
   const [portalLoading, setPortalLoading] = useState(false)
   const [checkoutBanner, setCheckoutBanner] = useState<'success' | 'cancelled' | null>(null)
+  const [editingName, setEditingName] = useState(false)
+  const [nameValue, setNameValue] = useState('')
+  const [savingName, setSavingName] = useState(false)
 
   useEffect(() => {
     fetchDashboard()
@@ -69,6 +72,26 @@ export default function SettingsPage() {
     }
   }
 
+  function startEditingName() {
+    setNameValue(data?.user.full_name || '')
+    setEditingName(true)
+  }
+
+  async function handleSaveName() {
+    const name = nameValue.trim()
+    if (!name || !data) return
+    setSavingName(true)
+    try {
+      await api.patch('/user/profile', { full_name: name })
+      setData({ ...data, user: { ...data.user, full_name: name } })
+      setEditingName(false)
+    } catch (err) {
+      console.error('Failed to update name:', err)
+    } finally {
+      setSavingName(false)
+    }
+  }
+
   const storagePercent = data
     ? Math.round((data.storage.used_bytes / data.storage.limit_bytes) * 100)
     : 0
@@ -113,11 +136,51 @@ export default function SettingsPage() {
               <div className="w-14 h-14 rounded-full bg-[#1C1C1C]/5 flex items-center justify-center text-xl font-bold text-[#A8192E] border border-[#1C1C1C]/10 flex-shrink-0">
                 {(data.user.full_name || data.user.email)[0]?.toUpperCase()}
               </div>
-              <div className="min-w-0">
-                <h3 className="text-lg font-bold text-[#1C1C1C] truncate">
-                  {data.user.full_name || 'Unnamed Organization'}
-                </h3>
+              <div className="min-w-0 flex-1">
+                {editingName ? (
+                  <div className="flex items-center gap-2 mb-0.5">
+                    <input
+                      value={nameValue}
+                      onChange={(e) => setNameValue(e.target.value)}
+                      autoFocus
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') handleSaveName()
+                        if (e.key === 'Escape') setEditingName(false)
+                      }}
+                      className="text-lg font-bold text-[#1C1C1C] border border-[#1C1C1C]/15 rounded-lg px-2.5 py-1 w-full max-w-xs focus:outline-none focus:border-[#A8192E]/50"
+                    />
+                    <button
+                      onClick={handleSaveName}
+                      disabled={savingName || !nameValue.trim()}
+                      className="p-1.5 rounded-lg text-[#A8192E] hover:bg-[#A8192E]/10 disabled:opacity-50 flex-shrink-0"
+                    >
+                      <span className="material-symbols-outlined text-lg">check</span>
+                    </button>
+                    <button
+                      onClick={() => setEditingName(false)}
+                      className="p-1.5 rounded-lg text-[#2C1A0E]/50 hover:bg-[#1C1C1C]/5 flex-shrink-0"
+                    >
+                      <span className="material-symbols-outlined text-lg">close</span>
+                    </button>
+                  </div>
+                ) : (
+                  <div className="flex items-center gap-2 mb-0.5">
+                    <h3 className="text-lg font-bold text-[#1C1C1C] truncate">
+                      {data.user.full_name || 'Unnamed Organization'}
+                    </h3>
+                    <button
+                      onClick={startEditingName}
+                      className="p-1 rounded-lg text-[#2C1A0E]/40 hover:bg-[#1C1C1C]/5 hover:text-[#A8192E] flex-shrink-0"
+                      title="Edit name"
+                    >
+                      <span className="material-symbols-outlined text-base">edit</span>
+                    </button>
+                  </div>
+                )}
                 <p className="text-sm text-[#2C1A0E]/60 truncate">{data.user.email}</p>
+                {data.user.organization_type && (
+                  <p className="text-xs text-[#2C1A0E]/50 mt-0.5">{data.user.organization_type}</p>
+                )}
               </div>
               <span className="ml-auto px-3 py-1 rounded-full text-xs font-semibold capitalize bg-[#A8192E]/10 text-[#A8192E] flex-shrink-0">
                 {data.user.plan} plan

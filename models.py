@@ -1,4 +1,4 @@
-from sqlalchemy import Column, String, DateTime, Text, Enum, ForeignKey, Boolean, BigInteger
+from sqlalchemy import Column, String, DateTime, Text, Enum, ForeignKey, Boolean, BigInteger, Integer
 from sqlalchemy.dialects.postgresql import UUID, JSONB
 from datetime import datetime, timezone
 
@@ -17,7 +17,7 @@ class User(Base):
     id = Column(UUID(as_uuid=True), primary_key=True)
     full_name = Column(String)
     email = Column(String)
-    organization_type = Column(Enum("Non-profit/NGO", "Research Lab", "SME", "Early-stage Startup", "Academic Institution", "Independent Specialist", "Other", name="org_type"), nullable=True)
+    organization_type = Column(Enum("Non-profit/NGO", "SME", "Early-stage Startup", "Academic Institution", "Independent Specialist", "Other", name="org_type"), nullable=True)
     area_of_focus = Column(String)
     storage_used_bytes = Column(BigInteger, default=0)
     storage_limit_bytes = Column(BigInteger, default=524288000)
@@ -27,6 +27,7 @@ class User(Base):
     subscription_status = Column(String, nullable=True)  # trialing, active, past_due, unpaid, canceled, paused
     bachs_customer_id = Column(String, nullable=True)
     bachs_subscription_id = Column(String, nullable=True)
+    drafts_this_month = Column(Integer, default=0)
     created_at = Column(DateTime(timezone=True), default=utcnow)
 
 class AgentRun(Base):

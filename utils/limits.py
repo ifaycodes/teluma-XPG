@@ -5,8 +5,8 @@ PLAN_LIMITS = {
         "feed_grants": 10,
         "vault_documents": 3,
         "storage_bytes": 10485760, # 10MB
-        "num_of_drafts": 0,
-        "can_apply": False,
+        "num_of_drafts": 2,
+        "can_apply": True,
     },
     "basic": {
         "feed_grants": None,        # unlimited
@@ -26,7 +26,7 @@ PLAN_LIMITS = {
         "feed_grants": None,
         "vault_documents": None,
         "storage_bytes": None,       # unlimited
-        "num_of_draft": None,
+        "num_of_drafts": None,
         "can_apply": True,
     }
 }

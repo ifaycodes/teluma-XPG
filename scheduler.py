@@ -132,7 +132,7 @@ def start_scheduler():
 async def reset_monthly_agent_runs():
     db = SessionLocal()
     try:
-        db.query(User).update({"num_of_draft_this_month": 0})
+        db.query(User).update({"drafts_this_month": 0})
         db.commit()
     finally:
         db.close()

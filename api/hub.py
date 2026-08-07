@@ -2,13 +2,13 @@ from fastapi import APIRouter, Depends, HTTPException
 from google.adk.cli.utils.common import BaseModel
 from sqlalchemy.orm import Session
 
-from agents.runner import run_agent
+from agents.runner import run_agent, log_agent_step
 from agents import job_manager
 from agents.application_flow import start_proposal_generation, save_draft
 from agents.ag3_outline import outline_agent
 from agents.ag4_proposal import proposal_agent
 from database import get_db
-from models import ApplicationTracker, ApplicationChat
+from models import ApplicationTracker, ApplicationChat, ActivityLog
 from auth import verify_token
 from datetime import datetime, timezone
 
@@ -259,6 +259,8 @@ async def chat_with_agent(
         version in the same JSON shape as before.
     """
 
+    log_agent_step(user_id, application_id, f"Revising the {stage} based on your request...")
+
     # call the sub-agent directly (not master_agent) so its raw JSON output
     # stays internal — it's meant for storage, never for display to the user
     response, _ = await run_agent(
@@ -267,6 +269,8 @@ async def chat_with_agent(
         session_id=str(application.id),
         agent=agent
     )
+
+    log_agent_step(user_id, application_id, f"Revised {stage} complete")
 
     save_draft(response, gcs_path, stage, title)
 
@@ -302,6 +306,38 @@ def get_chat_history(
         }
         for chat in chats
     ]
+
+@router.get("/{application_id}/activity")
+def get_application_activity(
+    application_id: str,
+    db: Session = Depends(get_db),
+    user_id: str = Depends(verify_token)
+):
+    """Agent telemetry (tool calls, handoffs) for this application, keyed the
+    same way discovery runs are — application_id doubles as agent_run_id
+    since outline/proposal generation route through master_agent too."""
+    application = db.query(ApplicationTracker).filter_by(
+        id=application_id,
+        user_id=user_id
+    ).first()
+
+    if not application:
+        raise HTTPException(status_code=404, detail="Application not found")
+
+    steps = db.query(ActivityLog).filter_by(
+        agent_run_id=application_id
+    ).order_by(ActivityLog.created_at.asc()).all()
+
+    return [
+        {
+            "actor": step.actor,
+            "action": step.action,
+            "extra_data": step.extra_data,
+            "timestamp": str(step.created_at),
+        }
+        for step in steps
+    ]
+
 
 @router.get("/{application_id}/download")
 def download_output(

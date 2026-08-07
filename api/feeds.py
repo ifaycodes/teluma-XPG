@@ -9,8 +9,9 @@ from agents.ag3_outline import outline_agent
 from agents.application_flow import start_application
 from utils.limits import check_can_apply, check_agent_runs
 from database import get_db
-from models import UserGrant, Grant, User, VaultDocument
+from models import UserGrant, Grant, User, VaultDocument, AgentRun
 from auth import verify_token
+from datetime import datetime, timezone
 from storage import upload_file, get_signed_url, GCS_BUCKET_AGENT, GCS_BUCKET_VAULT
 from utils.pdf_generator import generate_grants_pdf
 from utils.limits import get_feed_limit
@@ -101,6 +102,14 @@ async def refresh_feed(
         for doc in vault_docs
     ]
 
+    # groups telemetry for all of this refresh's grant evaluations under one
+    # discoverable run, even though each grant still gets its own independent
+    # agent conversation (see run_id vs session_id in agents/runner.py)
+    run = AgentRun(user_id=user_id, status="running")
+    db.add(run)
+    db.commit()
+    db.refresh(run)
+
     evaluated_count = 0
     for grant in new_grants:
         prompt = f"""
@@ -122,7 +131,7 @@ async def refresh_feed(
             - reason: brief explanation
         """
         try:
-            response, _ = await run_agent(prompt, user_id=user_id, agent=evaluation_agent)
+            response, _ = await run_agent(prompt, user_id=user_id, agent=evaluation_agent, run_id=str(run.id))
             result = extract_json(response)
             fit_category = result.get("fit_category")
             if fit_category not in VALID_FIT_CATEGORIES:
@@ -133,8 +142,10 @@ async def refresh_feed(
         db.add(UserGrant(user_id=user_id, grant_id=grant.id, fit_category=fit_category))
         evaluated_count += 1
 
+    run.status = "done"
+    run.completed_at = datetime.now(timezone.utc)
     db.commit()
-    return {"evaluated": evaluated_count}
+    return {"evaluated": evaluated_count, "run_id": str(run.id)}
 
 @router.post("/submit")
 async def submit_grant(

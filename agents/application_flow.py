@@ -3,10 +3,10 @@ import json
 
 from sqlalchemy.orm import Session
 
-from agents.runner import run_agent
+from agents.runner import run_agent, log_agent_step
 from agents import job_manager
 from database import SessionLocal
-from models import ApplicationTracker, VaultDocument
+from models import ApplicationTracker, VaultDocument, User
 from storage import upload_file, GCS_BUCKET_AGENT
 from utils.parsing import extract_json
 from utils.pdf_generator import render_document_pdf
@@ -71,11 +71,15 @@ async def _generate_outline_job(application_id: str, user_id: str):
             Generate a proposal outline.
         """
 
+        log_agent_step(user_id, application_id, f"Drafting a proposal outline for {application.grant.name}...")
+
         response, _ = await run_agent(
             prompt=prompt,
             user_id=user_id,
             session_id=application_id
         )
+
+        log_agent_step(user_id, application_id, "Outline draft complete — writing it to storage")
 
         outline_path = f"applications/{user_id}/{application_id}/outline.json"
         save_draft(response, outline_path, "outline", f"Proposal Outline — {application.grant.name}")
@@ -117,11 +121,15 @@ async def _generate_proposal_job(application_id: str, user_id: str):
             Return proposal text and itemized budget.
         """
 
+        log_agent_step(user_id, application_id, f"Writing the full proposal and budget for {application.grant.name}...")
+
         response, _ = await run_agent(
             prompt=prompt,
             user_id=user_id,
             session_id=application_id
         )
+
+        log_agent_step(user_id, application_id, "Proposal draft complete — writing it to storage")
 
         proposal_path = f"applications/{user_id}/{application_id}/proposal.json"
         save_draft(response, proposal_path, "proposal", f"Grant Proposal — {application.grant.name}")
@@ -174,6 +182,11 @@ async def start_application(grant, user_id: str, db: Session) -> ApplicationTrac
         status="outline_in_progress"
     )
     db.add(application)
+
+    db.query(User).filter_by(id=user_id).update({
+        User.drafts_this_month: User.drafts_this_month + 1
+    })
+
     db.commit()
     db.refresh(application)
 

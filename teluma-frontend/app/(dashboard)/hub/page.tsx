@@ -1,7 +1,7 @@
 'use client'
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import api from '@/lib/api'
-import { Application, ChatMessage } from '@/lib/types'
+import { Application, ChatMessage, AgentStep } from '@/lib/types'
 import { StatusBadge } from '@/components/ui/StatusBadge'
 import { OFFSET, OFFSET_BTN } from '@/lib/theme'
 
@@ -91,13 +91,44 @@ function DraftContent({ raw }: { raw: string }) {
   )
 }
 
+function DraftModal({ app, content, loadingContent, onClose }: any) {
+  const title = content?.kind === 'proposal' ? 'Proposal & Budget' : content?.kind === 'outline' ? 'Proposal Outline' : 'Draft'
+  return (
+    <div className="fixed inset-0 bg-[#1C1C1C]/60 z-[100] flex items-center justify-center p-4">
+      <div className="bg-[#FDFAF4] rounded-2xl w-full max-w-4xl max-h-[85vh] flex flex-col shadow-[0_8px_32px_rgba(28,28,28,0.25)]">
+        <div className="flex items-center justify-between px-6 py-4 border-b border-[#1C1C1C]/10 flex-shrink-0">
+          <div className="min-w-0">
+            <h3 className="text-lg font-bold text-[#1C1C1C] truncate">{title}</h3>
+            <p className="text-xs text-[#2C1A0E]/50 truncate">{app.grant_name}</p>
+          </div>
+          <button onClick={onClose} className="p-2 rounded-lg hover:bg-[#1C1C1C]/5 text-[#2C1A0E]/60 flex-shrink-0">
+            <span className="material-symbols-outlined">close</span>
+          </button>
+        </div>
+        <div className="flex-1 overflow-y-auto p-6">
+          {loadingContent ? (
+            <div className="flex justify-center py-12">
+              <div className="w-6 h-6 border-2 border-[#A8192E] border-t-transparent rounded-full animate-spin" />
+            </div>
+          ) : content?.content ? (
+            <DraftContent raw={content.content} />
+          ) : (
+            <p className="text-sm text-[#2C1A0E]/50">Nothing drafted yet for this stage.</p>
+          )}
+        </div>
+      </div>
+    </div>
+  )
+}
+
 function ApplicationCard({
   app,
   expanded,
   onToggle,
-  content,
-  loadingContent,
+  hasContent,
+  onViewDraft,
   chat,
+  activity,
   loadingChat,
   chatInput,
   setChatInput,
@@ -112,6 +143,13 @@ function ApplicationCard({
   onDownload,
   chatEndRef,
 }: any) {
+  const timeline = useMemo(() => {
+    const items = [
+      ...chat.map((m: ChatMessage) => ({ kind: 'chat' as const, ts: m.created_at, role: m.role, message: m.message })),
+      ...activity.map((a: AgentStep) => ({ kind: 'activity' as const, ts: a.timestamp, action: a.action, extra_data: a.extra_data })),
+    ]
+    return items.sort((a, b) => new Date(a.ts).getTime() - new Date(b.ts).getTime())
+  }, [chat, activity])
   return (
     <div className={`bg-[#FDFAF4] border border-[#1C1C1C]/10 rounded-xl overflow-hidden ${OFFSET}`}>
       <button
@@ -138,46 +176,48 @@ function ApplicationCard({
       {expanded && (
         <div className="border-t border-[#1C1C1C]/8 p-5 space-y-5">
 
-          {/* Drafted content */}
-          <div>
-            <h5 className="text-xs font-bold uppercase tracking-wide text-[#2C1A0E]/50 mb-2">Agent Draft</h5>
-            <div className="bg-[#1C1C1C]/[0.03] rounded-lg p-4 max-h-72 overflow-y-auto">
-              {loadingContent ? (
-                <div className="flex justify-center py-4">
-                  <div className="w-5 h-5 border-2 border-[#A8192E] border-t-transparent rounded-full animate-spin" />
-                </div>
-              ) : content?.content ? (
-                <DraftContent raw={content.content} />
-              ) : (
-                <p className="text-sm text-[#2C1A0E]/50">Nothing drafted yet for this stage.</p>
-              )}
-            </div>
+          {/* Draft access */}
+          <div className="flex items-center justify-between">
+            <h5 className="text-xs font-bold uppercase tracking-wide text-[#2C1A0E]/50">Activity</h5>
+            {hasContent && (
+              <button
+                onClick={onViewDraft}
+                className="flex items-center gap-1.5 text-xs font-semibold text-[#A8192E] hover:underline"
+              >
+                <span className="material-symbols-outlined text-base">description</span>
+                View Draft
+              </button>
+            )}
           </div>
 
-          {/* Chat */}
+          {/* Merged chat + agent telemetry timeline */}
           <div>
-            <h5 className="text-xs font-bold uppercase tracking-wide text-[#2C1A0E]/50 mb-2">
-              Ask for changes
-            </h5>
-            <div className="space-y-2 max-h-56 overflow-y-auto mb-3">
+            <div className="space-y-2 max-h-72 overflow-y-auto mb-3">
               {loadingChat ? (
                 <div className="flex justify-center py-4">
                   <div className="w-5 h-5 border-2 border-[#A8192E] border-t-transparent rounded-full animate-spin" />
                 </div>
-              ) : chat.length === 0 ? (
-                <p className="text-sm text-[#2C1A0E]/50 py-2">No messages yet — ask the agent to change the headline, tone, a budget line, etc.</p>
+              ) : timeline.length === 0 ? (
+                <p className="text-sm text-[#2C1A0E]/50 py-2">No activity yet — ask the agent to change the headline, tone, a budget line, etc.</p>
               ) : (
-                chat.map((msg: ChatMessage, i: number) => (
-                  <div key={i} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
-                    <div className={`max-w-[85%] rounded-xl px-3.5 py-2 text-sm ${
-                      msg.role === 'user'
-                        ? 'bg-[#1C1C1C] text-[#FDFAF4]'
-                        : 'bg-[#1C1C1C]/5 text-[#1C1C1C]'
-                    }`}>
-                      {msg.message}
+                timeline.map((item: any, i: number) =>
+                  item.kind === 'activity' ? (
+                    <div key={i} className="flex items-center gap-2 text-xs text-[#2C1A0E]/50 py-0.5">
+                      <span className="material-symbols-outlined text-sm text-[#A8192E]/60 flex-shrink-0">bolt</span>
+                      <span className="truncate">{item.action}</span>
                     </div>
-                  </div>
-                ))
+                  ) : (
+                    <div key={i} className={`flex ${item.role === 'user' ? 'justify-end' : 'justify-start'}`}>
+                      <div className={`max-w-[85%] rounded-xl px-3.5 py-2 text-sm ${
+                        item.role === 'user'
+                          ? 'bg-[#1C1C1C] text-[#FDFAF4]'
+                          : 'bg-[#1C1C1C]/5 text-[#1C1C1C]'
+                      }`}>
+                        {item.message}
+                      </div>
+                    </div>
+                  )
+                )
               )}
               {getAvailableFiles(app).map((file) => (
                 <div key={file.kind} className="flex justify-start">
@@ -307,11 +347,13 @@ export default function HubPage() {
 
   const [content, setContent] = useState<{ kind: string | null, content: string | null } | null>(null)
   const [loadingContent, setLoadingContent] = useState(false)
+  const [viewingDraft, setViewingDraft] = useState(false)
 
   const [chat, setChat] = useState<ChatMessage[]>([])
   const [loadingChat, setLoadingChat] = useState(false)
   const [chatInput, setChatInput] = useState('')
   const [sendingChat, setSendingChat] = useState(false)
+  const [activity, setActivity] = useState<AgentStep[]>([])
   const chatEndRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
@@ -322,21 +364,25 @@ export default function HubPage() {
     if (expandedId) {
       fetchContent(expandedId)
       fetchChat(expandedId)
+      fetchActivity(expandedId)
     }
   }, [expandedId])
 
   useEffect(() => {
     chatEndRef.current?.scrollIntoView({ behavior: 'smooth' })
-  }, [chat])
+  }, [chat, activity])
 
   // poll while any application has an active background job, since
   // approve-outline/apply return immediately instead of waiting for it
   useEffect(() => {
     const hasInProgress = applications.some(a => IN_PROGRESS_STATUSES.includes(a.status))
     if (!hasInProgress) return
-    const interval = setInterval(fetchApplications, 4000)
+    const interval = setInterval(() => {
+      fetchApplications()
+      if (expandedId) fetchActivity(expandedId)
+    }, 4000)
     return () => clearInterval(interval)
-  }, [applications])
+  }, [applications, expandedId])
 
   async function fetchApplications() {
     try {
@@ -374,8 +420,18 @@ export default function HubPage() {
     }
   }
 
+  async function fetchActivity(id: string) {
+    try {
+      const res = await api.get(`/hub/${id}/activity`)
+      setActivity(res.data || [])
+    } catch (err) {
+      console.error('Failed to fetch activity:', err)
+    }
+  }
+
   function toggle(id: string) {
     setExpandedId(prev => (prev === id ? null : id))
+    setViewingDraft(false)
   }
 
   async function handleApproveOutline(id: string) {
@@ -458,6 +514,8 @@ export default function HubPage() {
     try {
       const res = await api.post(`/hub/${expandedId}/chat`, { message })
       setChat(prev => [...prev, { role: 'agent', message: res.data.response, created_at: new Date().toISOString() }])
+      fetchActivity(expandedId)
+      fetchContent(expandedId)
     } catch (err) {
       console.error('Failed to send chat:', err)
     } finally {
@@ -469,7 +527,8 @@ export default function HubPage() {
     <div className="max-w-4xl mx-auto">
 
       <p className="text-sm text-[#2C1A0E]/60 mb-6">
-        Review outlines and proposals, chat through revisions, and track submissions
+        Review and manage multi-agent application workflows.
+        Approve outlines and proposals, chat through revisions, and track submissions
       </p>
 
       {loadingApps ? (
@@ -488,9 +547,10 @@ export default function HubPage() {
               app={app}
               expanded={expandedId === app.id}
               onToggle={() => toggle(app.id)}
-              content={expandedId === app.id ? content : null}
-              loadingContent={loadingContent}
-              chat={chat}
+              hasContent={expandedId === app.id && !!content?.content}
+              onViewDraft={() => setViewingDraft(true)}
+              chat={expandedId === app.id ? chat : []}
+              activity={expandedId === app.id ? activity : []}
               loadingChat={loadingChat}
               chatInput={chatInput}
               setChatInput={setChatInput}
@@ -507,6 +567,15 @@ export default function HubPage() {
             />
           ))}
         </div>
+      )}
+
+      {viewingDraft && expandedId && (
+        <DraftModal
+          app={applications.find(a => a.id === expandedId)}
+          content={content}
+          loadingContent={loadingContent}
+          onClose={() => setViewingDraft(false)}
+        />
       )}
     </div>
   )

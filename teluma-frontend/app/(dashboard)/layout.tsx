@@ -11,6 +11,7 @@ const navItems = [
   { href: '/feed', label: 'Feed', icon: 'rss_feed' },
   { href: '/vault', label: 'Vault', icon: 'inventory_2' },
   { href: '/hub', label: 'Hub', icon: 'hub' },
+  { href: '/agents', label: 'Agents', icon: 'smart_toy' },
 ]
 
 const secondaryNavItems = [
@@ -36,6 +37,7 @@ export default function DashboardLayout({
   const router = useRouter()
   const pathname = usePathname()
   const [user, setUser] = useState<any>(null)
+  const [profileName, setProfileName] = useState<string | null>(null)
   const [pinned, setPinned] = useState(false)
   const [hovering, setHovering] = useState(false)
   const [planSelected, setPlanSelected] = useState<boolean | null>(null)
@@ -55,6 +57,7 @@ export default function DashboardLayout({
       try {
         const res = await api.post('/user/me')
         setPlanSelected(!!res.data.plan_selected)
+        setProfileName(res.data.full_name || null)
       } catch (err) {
         console.error('Failed to sync profile:', err)
       }
@@ -176,7 +179,7 @@ export default function DashboardLayout({
             className="rounded-full hover:bg-[#1C1C1C]/5 transition-colors p-0.5"
           >
             <div className="w-8 h-8 rounded-full bg-[#FDFAF4] flex items-center justify-center text-sm font-bold text-[#A8192E] border border-[#1C1C1C]/10">
-              {user?.email?.[0]?.toUpperCase()}
+              {(profileName || user?.email)?.[0]?.toUpperCase()}
             </div>
           </button>
         </div>

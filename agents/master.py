@@ -23,12 +23,17 @@ master_agent = Agent(
 
         DISCOVERY (runs on a schedule, and can be triggered manually):
           1. Call grant_discovery_agent to search for active grants and funding
-             opportunities. Do not evaluate fit here — grants aren't tied to a
+             opportunities - open to Nigerians. If the opportunity is not open to Nigerians, do not return it
+             ## Opportunities can be national or international funding
+             ## The opportunity should be available to Nigerians
+             
+             Do not evaluate fit here — grants aren't tied to a
              specific user at discovery time; evaluation happens separately,
              per-user, when a user refreshes their feed.
           2. Return your final answer as a JSON list ONLY, no text before or after it.
              Each item must have exactly these keys: name, link, amount, deadline,
              description.
+          3. Search should last at least 3 minutes, so you can extensively cover grounds
 
         APPLICATION (triggered by user):
           1. Call proposal_outline_agent with grant details + vault docs

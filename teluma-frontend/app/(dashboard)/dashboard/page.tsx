@@ -34,6 +34,7 @@ export default function DashboardPage() {
   const [loading, setLoading] = useState(true)
   const [triggering, setTriggering] = useState(false)
   const [showToast, setShowToast] = useState(false)
+  const [lastRunId, setLastRunId] = useState<string | null>(null)
 
   useEffect(() => {
     fetchDashboard()
@@ -53,7 +54,8 @@ export default function DashboardPage() {
   async function handleTrigger() {
     setTriggering(true)
     try {
-      await api.post('/agent/trigger')
+      const res = await api.post('/agent/trigger')
+      setLastRunId(res.data?.run_id ?? null)
       setShowToast(true)
       setTimeout(() => setShowToast(false), 8000)
     } catch (err) {
@@ -88,6 +90,11 @@ export default function DashboardPage() {
         <div className={`flex items-center gap-3 bg-[#1C1C1C] text-[#FDFAF4] rounded-xl px-4 py-3 mb-6 ${OFFSET}`}>
           <span className="material-symbols-outlined text-[#FDFAF4]/70">smart_toy</span>
           <p className="text-sm flex-1">Discovery started — find newly discovered grants on your Feed soon.</p>
+          {lastRunId && (
+            <Link href={`/agents?run=${lastRunId}`} className="text-sm font-semibold underline flex-shrink-0">
+              Watch Progress
+            </Link>
+          )}
           <Link href="/feed" className="text-sm font-semibold underline flex-shrink-0">Go to Feed</Link>
           <button onClick={() => setShowToast(false)} className="text-[#FDFAF4]/50 hover:text-[#FDFAF4] flex-shrink-0">
             <span className="material-symbols-outlined text-lg">close</span>

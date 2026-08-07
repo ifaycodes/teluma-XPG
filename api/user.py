@@ -1,4 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException
+from pydantic import BaseModel
 from sqlalchemy.orm import Session
 from database import get_db
 from models import User, UserGrant, ApplicationTracker, VaultDocument
@@ -58,6 +59,30 @@ def select_free_plan(
     return {"plan": user.plan, "plan_selected": user.plan_selected}
 
 
+class ProfileUpdate(BaseModel):
+    full_name: str
+
+
+@profile_router.patch("/profile")
+def update_profile(
+    body: ProfileUpdate,
+    db: Session = Depends(get_db),
+    user_id: str = Depends(verify_token),
+):
+    user = db.query(User).filter_by(id=user_id).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    name = body.full_name.strip()
+    if not name:
+        raise HTTPException(status_code=400, detail="Name can't be empty")
+
+    user.full_name = name
+    db.commit()
+
+    return {"full_name": user.full_name}
+
+
 @router.get("/")
 def get_dashboard(
         db: Session = Depends(get_db),
@@ -82,6 +107,7 @@ def get_dashboard(
             "full_name": user.full_name,
             "email": user.email,
             "plan": user.plan,
+            "organization_type": user.organization_type,
         },
         "storage": {
             "used_bytes": user.storage_used_bytes,

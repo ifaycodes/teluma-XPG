@@ -42,15 +42,17 @@ const STEPS = [
   },
 ]
 
+// NGN figures are an estimate only (USD is what's actually charged) — see
+// the disclaimer under the pricing grid. Calculated at $1 = ₦1,400.
 const TIERS = [
   {
     name: 'Starter',
-    priceNgn: '₦10,000',
-    priceUsd: '$10 USD',
+    priceUsd: '$10',
+    priceNgn: '≈ ₦14,000',
     period: '/mo',
     description: 'For small teams running a targeted funding pipeline.',
     features: [
-      '10 AI-drafted proposals/mo',
+      '5 AI-drafted proposals/mo',
       'Full live discovery engine',
       'Fit-scoring on all matches',
       '20 core documents (500MB)',
@@ -61,8 +63,8 @@ const TIERS = [
   {
     name: 'Pro',
     badge: 'Most Popular',
-    priceNgn: '₦25,000',
-    priceUsd: '$25 USD',
+    priceUsd: '$25',
+    priceNgn: '≈ ₦35,000',
     period: '/mo',
     description: 'For active teams applying to every qualified grant.',
     features: [
@@ -76,8 +78,8 @@ const TIERS = [
   },
   {
     name: 'Agency / Consultant',
-    priceNgn: '₦80,000',
-    priceUsd: '$80 USD',
+    priceUsd: '$80',
+    priceNgn: '≈ ₦112,000',
     period: '/mo',
     description: 'For grant writers, consultants, and multi-program NGOs.',
     features: [
@@ -316,9 +318,9 @@ export default function HomePage() {
                   {tier.description}
                 </p>
                 <div className="mb-5">
-                  <span className="text-3xl font-black">{tier.priceNgn}</span>
+                  <span className="text-3xl font-black">{tier.priceUsd}</span>
                   <span className={`text-sm ${tier.highlighted ? 'text-[#FDFAF4]/80' : 'text-[#FDFAF4]/50'}`}>{tier.period}</span>
-                  <div className={`text-xs ${tier.highlighted ? 'text-[#FDFAF4]/70' : 'text-[#FDFAF4]/40'}`}>{tier.priceUsd}</div>
+                  <div className={`text-xs ${tier.highlighted ? 'text-[#FDFAF4]/70' : 'text-[#FDFAF4]/40'}`}>{tier.priceNgn}</div>
                 </div>
                 <ul className="space-y-2.5 mb-6 flex-1">
                   {tier.features.map((f) => (
@@ -341,6 +343,11 @@ export default function HomePage() {
               </div>
             ))}
           </div>
+
+          <p className="text-center text-xs text-[#FDFAF4]/40 max-w-lg mx-auto">
+            Billed in USD. Naira amounts are an estimate — the exact amount
+            your card is charged depends on your bank's exchange rate at checkout.
+          </p>
         </div>
       </section>
 

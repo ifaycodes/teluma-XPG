@@ -1,5 +1,6 @@
 'use client'
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { Suspense, useCallback, useEffect, useRef, useState } from 'react'
+import { useSearchParams } from 'next/navigation'
 import api from '@/lib/api'
 import { ActiveRun, HistoryRun, AgentStep } from '@/lib/types'
 import { StatusBadge } from '@/components/ui/StatusBadge'
@@ -23,6 +24,15 @@ function formatTime(ts: string) {
 }
 
 export default function AgentsPage() {
+  return (
+    <Suspense fallback={null}>
+      <AgentsPageContent />
+    </Suspense>
+  )
+}
+
+function AgentsPageContent() {
+  const searchParams = useSearchParams()
   const [activeRuns, setActiveRuns] = useState<ActiveRun[]>([])
   const [history, setHistory] = useState<HistoryRun[]>([])
   const [loadingRuns, setLoadingRuns] = useState(true)
@@ -66,6 +76,8 @@ export default function AgentsPage() {
 
   useEffect(() => {
     fetchRuns()
+    const runParam = searchParams.get('run')
+    if (runParam) setSelectedRunId(runParam)
   }, [fetchRuns])
 
   useEffect(() => {

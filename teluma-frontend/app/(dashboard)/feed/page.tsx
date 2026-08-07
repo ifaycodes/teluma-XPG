@@ -1,6 +1,7 @@
 'use client'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
+import Link from 'next/link'
 import api from '@/lib/api'
 import { Grant, FeedData } from '@/lib/types'
 import { EmptyState } from '@/components/ui/EmptyState'
@@ -197,11 +198,11 @@ export default function FeedPage() {
   const [dragOver, setDragOver] = useState(false)
   const [submitLoading, setSubmitLoading] = useState(false)
   const [selectedGrant, setSelectedGrant] = useState<Grant | null>(null)
-  const [toast, setToast] = useState<string | null>(null)
+  const [toast, setToast] = useState<{ message: string, runId?: string } | null>(null)
 
-  function showToast(message: string) {
-    setToast(message)
-    setTimeout(() => setToast(null), 5000)
+  function showToast(message: string, runId?: string) {
+    setToast({ message, runId })
+    setTimeout(() => setToast(null), runId ? 8000 : 5000)
   }
   const fileInputRef = useRef<HTMLInputElement>(null)
 
@@ -237,8 +238,13 @@ export default function FeedPage() {
   async function handleRefresh() {
     setRefreshing(true)
     try {
-      await api.post('/feeds/refresh')
+      const res = await api.post('/feeds/refresh')
       await fetchFeed()
+      if (res.data?.run_id) {
+        showToast(`Evaluated ${res.data.evaluated} grant${res.data.evaluated === 1 ? '' : 's'}.`, res.data.run_id)
+      } else {
+        showToast(res.data?.message || 'Feed refreshed.')
+      }
     } catch (err) {
       console.error('Refresh failed:', err)
     } finally {
@@ -320,7 +326,7 @@ export default function FeedPage() {
     <div className="max-w-7xl mx-auto">
 
       <p className="text-sm text-[#2C1A0E]/60 mb-5">
-        AI-matched opportunities for your organization
+        Continuous AI-matched funding opportunities for your organization.
       </p>
 
       {/* Controls row: filters + actions together */}
@@ -540,7 +546,12 @@ export default function FeedPage() {
       {toast && (
         <div className={`fixed bottom-20 lg:bottom-6 left-1/2 -translate-x-1/2 flex items-center gap-3 bg-[#1C1C1C] text-[#FDFAF4] rounded-xl px-4 py-3 z-50 ${OFFSET}`}>
           <span className="material-symbols-outlined text-[#FDFAF4]/70">check_circle</span>
-          <p className="text-sm">{toast}</p>
+          <p className="text-sm">{toast.message}</p>
+          {toast.runId && (
+            <Link href={`/agents?run=${toast.runId}`} className="text-sm font-semibold underline flex-shrink-0">
+              Watch Progress
+            </Link>
+          )}
           <button onClick={() => setToast(null)} className="text-[#FDFAF4]/50 hover:text-[#FDFAF4] flex-shrink-0">
             <span className="material-symbols-outlined text-lg">close</span>
           </button>

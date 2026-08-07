@@ -300,6 +300,7 @@ export default function VaultPage() {
               <span className="text-[#A8192E] font-semibold">browse</span>
             </p>
             <p className="text-xs text-[#2C1A0E]/40 mt-1">PDF, DOCX up to 15MB each — select multiple at once</p>
+            <p className="text-xs text-[#2C1A0E]/40 mt-1">Upload past proposals, pitch decks, audited reports, CVs, or project summaries</p>
           </div>
 
           {/* Documents */}

@@ -19,6 +19,7 @@ from utils.bachs_client import (
     verify_webhook_signature,
 )
 from utils.notify import notify
+from utils.email_client import send_payment_success_email, send_payment_failed_email
 
 router = APIRouter(prefix="/billing", tags=["billing"])
 
@@ -100,18 +101,18 @@ async def bachs_webhook(request: Request, db: Session = Depends(get_db)):
     data = event.get("data", {}) or {}
 
     if event_type == "checkout.completed":
-        _handle_checkout_completed(db, data)
+        await _handle_checkout_completed(db, data)
     elif event_type == "customer.subscription.updated":
         _handle_subscription_updated(db, data)
     elif event_type == "customer.subscription.deleted":
         _handle_subscription_deleted(db, data)
     elif event_type == "collection.failed":
-        _handle_collection_failed(db, data)
+        await _handle_collection_failed(db, data)
 
     return {"received": True}
 
 
-def _handle_checkout_completed(db: Session, data: dict):
+async def _handle_checkout_completed(db: Session, data: dict):
     if data.get("payment_status") not in ("paid", "no_payment_required"):
         return
 
@@ -141,6 +142,7 @@ def _handle_checkout_completed(db: Session, data: dict):
         db, str(user.id), "success", "Subscription activated",
         f"You're now on the {plan.capitalize()} plan."
     )
+    await send_payment_success_email(user.email, user.full_name, plan)
 
 
 def _handle_subscription_updated(db: Session, data: dict):
@@ -170,7 +172,7 @@ def _handle_subscription_deleted(db: Session, data: dict):
     )
 
 
-def _handle_collection_failed(db: Session, data: dict):
+async def _handle_collection_failed(db: Session, data: dict):
     customer = data.get("customer") or {}
     # collection.failed uses `id`, other events use `customer_id` — check both
     customer_id = customer.get("customer_id") or customer.get("id")
@@ -178,10 +180,9 @@ def _handle_collection_failed(db: Session, data: dict):
     if not user:
         return
 
-    notify(
-        db, str(user.id), "failure", "Payment failed",
-        data.get("reason") or "We couldn't process your last payment. Please update your payment method."
-    )
+    reason = data.get("reason") or "We couldn't process your last payment. Please update your payment method."
+    notify(db, str(user.id), "failure", "Payment failed", reason)
+    await send_payment_failed_email(user.email, user.full_name, data.get("reason"))
 
 
 def _find_user_for_subscription(db: Session, data: dict):

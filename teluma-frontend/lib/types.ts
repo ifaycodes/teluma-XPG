@@ -45,6 +45,7 @@ export interface DashboardData {
     full_name: string | null
     email: string
     plan: string
+    organization_type: string | null
   }
   storage: {
     used_bytes: number
