@@ -13,7 +13,6 @@ from models import UserGrant, Grant, User, VaultDocument, AgentRun
 from auth import verify_token
 from datetime import datetime, timezone
 from storage import upload_file, get_signed_url, GCS_BUCKET_AGENT, GCS_BUCKET_VAULT
-from utils.pdf_generator import generate_grants_pdf
 from utils.limits import get_feed_limit
 from utils.parsing import extract_json, parse_deadline
 from typing import Optional
@@ -135,7 +134,7 @@ async def refresh_feed(
             result = extract_json(response)
             fit_category = result.get("fit_category")
             if fit_category not in VALID_FIT_CATEGORIES:
-                break
+                continue
         except Exception:
             fit_category = "low_probability"
 
@@ -232,6 +231,9 @@ async def submit_grant(
         db.add(user_grant)
         db.commit()
 
+        user = db.query(User).filter_by(id=user_id).first()
+        check_can_apply(user)
+        check_agent_runs(user)
         # auto trigger application if fit
         application = None
         if fit_category in ["prime_match", "moderate_fit", "low_probability"]:
@@ -298,46 +300,3 @@ async def apply_for_grant(
         "grant_id": grant_id,
         "outline_gcs_path": application.outline_gcs_path
     }
-
-
-@router.get("/export")
-def export_grants(
-        db: Session = Depends(get_db),
-        user_id: str = Depends(verify_token)
-):
-    # get user
-    user = db.query(User).filter_by(id=user_id).first()
-
-    # get all grants grouped
-    results = db.query(UserGrant).filter(
-        UserGrant.user_id == user_id
-    ).all()
-
-    feed = {"prime_match": [], "moderate_fit": [], "low_probability": []}
-    for ug in results:
-        feed[ug.fit_category].append({
-            "name": ug.grant.name,
-            "amount": ug.grant.amount,
-            "deadline": str(ug.grant.deadline) if ug.grant.deadline else "—",
-            "link": ug.grant.link or "—"
-        })
-
-    # generate pdf
-    pdf_bytes = generate_grants_pdf(grants=feed, user_name=user.full_name or user.email)
-
-    # upload to GCS
-    gcs_path = f"exports/{user_id}/{uuid.uuid4()}_grants.pdf"
-    upload_file(
-        contents=pdf_bytes,
-        destination_path=gcs_path,
-        bucket_name=GCS_BUCKET_AGENT,
-        content_type="application/pdf"
-    )
-
-    # return signed url
-    url = get_signed_url(
-        gcs_path=gcs_path,
-        bucket_name=GCS_BUCKET_AGENT,
-        expiration_minutes=30
-    )
-    return {"download_url": url}

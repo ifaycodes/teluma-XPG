@@ -57,6 +57,12 @@ def get_agent_history(
     ]
 
 
+import asyncio
+import json
+from fastapi.responses import StreamingResponse
+from database import SessionLocal
+
+
 @router.get("/{run_id}/steps")
 def get_run_steps(
     run_id: str,
@@ -85,3 +91,43 @@ def get_run_steps(
         }
         for step in steps
     ]
+
+
+@router.get("/stream/{run_id}")
+async def stream_agent_telemetry(
+    run_id: str,
+    user_id: str = Depends(verify_token)
+):
+    """Server-Sent Events (SSE) streaming endpoint for real-time agent telemetry."""
+    async def event_generator():
+        last_step_count = 0
+        max_attempts = 120  # 2 minute timeout protection
+
+        for _ in range(max_attempts):
+            db = SessionLocal()
+            try:
+                run = db.query(AgentRun).filter_by(id=run_id, user_id=user_id).first()
+                steps = db.query(ActivityLog).filter_by(agent_run_id=run_id).order_by(ActivityLog.created_at.asc()).all()
+
+                if len(steps) > last_step_count:
+                    new_steps = steps[last_step_count:]
+                    last_step_count = len(steps)
+                    for step in new_steps:
+                        payload = {
+                            "action": step.action,
+                            "actor": step.actor,
+                            "extra_data": step.extra_data,
+                            "timestamp": str(step.created_at),
+                            "run_status": run.status if run else "running"
+                        }
+                        yield f"data: {json.dumps(payload)}\n\n"
+
+                if run and run.status in ("done", "failed", "cancelled"):
+                    yield f"data: {json.dumps({'event': 'complete', 'status': run.status})}\n\n"
+                    break
+            finally:
+                db.close()
+
+            await asyncio.sleep(1.0)
+
+    return StreamingResponse(event_generator(), media_type="text/event-stream")

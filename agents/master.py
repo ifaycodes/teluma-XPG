@@ -31,8 +31,15 @@ master_agent = Agent(
              specific user at discovery time; evaluation happens separately,
              per-user, when a user refreshes their feed.
           2. Return your final answer as a JSON list ONLY, no text before or after it.
-             Each item must have exactly these keys: name, link, amount, deadline,
-             description.
+             Each item must have exactly these keys: 
+             - name
+            - funding_amount
+            - deadline
+            - description
+            - required_document
+            - link
+            - eligibility_requirements
+            - restrictions such as word limit etc
           3. Search should last at least 3 minutes, so you can extensively cover grounds
 
         APPLICATION (triggered by user):

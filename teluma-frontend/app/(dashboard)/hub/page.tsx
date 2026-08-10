@@ -272,13 +272,26 @@ function ApplicationCard({
               </button>
             )}
             {app.status === 'pending' && (
-              <button
-                onClick={onSubmit}
-                disabled={actionLoading}
-                className={`px-4 py-2 bg-[#1C1C1C] text-[#FDFAF4] rounded-lg text-sm font-semibold hover:bg-[#1C1C1C]/85 transition-all disabled:opacity-50 ${OFFSET_BTN}`}
-              >
-                Submit Application
-              </button>
+              <div className="flex flex-col gap-2">
+                <button
+                  onClick={onSubmit}
+                  disabled={actionLoading}
+                  className={`px-4 py-2 bg-[#1C1C1C] text-[#FDFAF4] rounded-lg text-sm font-semibold hover:bg-[#1C1C1C]/85 transition-all disabled:opacity-50 ${OFFSET_BTN}`}
+                >
+                  Submit Application
+                </button>
+                <p className="text-xs text-[#2C1A0E]/70 bg-[#F5F0E8] p-2.5 rounded-lg border border-[#1C1C1C]/10">
+                  ℹ️ <strong>Submission Mode:</strong> Please check the official{' '}
+                  {app.grant_link ? (
+                    <a href={app.grant_link} target="_blank" rel="noopener noreferrer" className="text-[#A8192E] font-bold underline">
+                      grant link
+                    </a>
+                  ) : (
+                    'grant details'
+                  )}{' '}
+                  to follow the granter's exact submission mode (portal upload, email, or online form) using your downloaded proposal.
+                </p>
+              </div>
             )}
             {IN_PROGRESS_STATUSES.includes(app.status) && (
               <div className="flex items-center gap-3">
@@ -297,10 +310,20 @@ function ApplicationCard({
               </div>
             )}
             {app.status === 'submitted' && (
-              <span className="text-sm text-[#1C1C1C] flex items-center gap-2 font-medium">
-                <span className="material-symbols-outlined text-lg">check_circle</span>
-                Submitted on {formatDate(app.submitted_at)}
-              </span>
+              <div className="space-y-2">
+                <span className="text-sm text-[#1C1C1C] flex items-center gap-2 font-medium">
+                  <span className="material-symbols-outlined text-lg text-[#A8192E]">check_circle</span>
+                  Submitted on {formatDate(app.submitted_at)}
+                </span>
+                {app.grant_link && (
+                  <p className="text-xs text-[#2C1A0E]/70 bg-[#F5F0E8] p-2.5 rounded-lg border border-[#1C1C1C]/10">
+                    ℹ️ Verify submission status on the{' '}
+                    <a href={app.grant_link} target="_blank" rel="noopener noreferrer" className="text-[#A8192E] font-bold underline">
+                      official grant portal
+                    </a>.
+                  </p>
+                )}
+              </div>
             )}
             {app.status === 'failed' && (
               <div className="flex items-center gap-3">

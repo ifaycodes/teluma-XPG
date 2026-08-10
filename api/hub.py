@@ -1,5 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException
-from google.adk.cli.utils.common import BaseModel
+from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
 from agents.runner import run_agent, log_agent_step
@@ -8,9 +8,10 @@ from agents.application_flow import start_proposal_generation, save_draft
 from agents.ag3_outline import outline_agent
 from agents.ag4_proposal import proposal_agent
 from database import get_db
-from models import ApplicationTracker, ApplicationChat, ActivityLog
+from models import ApplicationTracker, ApplicationChat, ActivityLog, VaultDocument, User
 from auth import verify_token
 from datetime import datetime, timezone
+from utils.notify import notify
 
 from storage import get_signed_url, download_text, GCS_BUCKET_AGENT
 
@@ -38,6 +39,7 @@ def get_applications(
             "grant_name": app.grant.name,
             "grant_amount": app.grant.amount,
             "grant_deadline": str(app.grant.deadline),
+            "grant_link": app.grant.link,
             "status": app.status,
             "outline_gcs_path": app.outline_gcs_path,
             "proposal_gcs_path": app.proposal_gcs_path,
@@ -116,12 +118,36 @@ def approve_proposal(
 
     # mark ready — user will submit manually
     application.status = "pending"
+
+    # Auto-upload approved proposal PDF strictly upon approval
+    if application.proposal_gcs_path:
+        pdf_path = application.proposal_gcs_path.rsplit(".", 1)[0] + ".pdf"
+        existing_doc = db.query(VaultDocument).filter_by(
+            user_id=user_id,
+            gcs_path=pdf_path
+        ).first()
+        if not existing_doc:
+            doc_name = f"Approved Proposal — {application.grant.name}.pdf"
+            vault_doc = VaultDocument(
+                user_id=user_id,
+                name=doc_name,
+                tag="proposal",
+                gcs_path=pdf_path,
+                file_type="application/pdf",
+                file_size_bytes=500000
+            )
+            db.add(vault_doc)
+            user = db.query(User).filter_by(id=user_id).first()
+            if user:
+                user.storage_used_bytes += 500000
+            notify(db, user_id, "success", "Proposal Saved to Vault", f"Your approved proposal for {application.grant.name} is now stored in your Vault.")
+
     db.commit()
 
     return {
         "application_id": str(application.id),
         "status": application.status,
-        "message": "Proposal approved. Ready for submission."
+        "message": "Proposal approved and saved to Vault. Ready for submission."
     }
 
 @router.post("/{application_id}/submit")
@@ -145,7 +171,12 @@ def submit_application(
     application.submitted_at = datetime.now(timezone.utc)
     db.commit()
 
-    return {"status": "submitted", "submitted_at": str(application.submitted_at)}
+    return {
+        "status": "submitted",
+        "submitted_at": str(application.submitted_at),
+        "grant_link": application.grant.link,
+        "message": "Application marked as submitted. Please check the official grant link to verify submission requirements."
+    }
 
 @router.get("/{application_id}")
 def get_application(

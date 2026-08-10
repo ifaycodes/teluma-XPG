@@ -36,6 +36,7 @@ class AgentRun(Base):
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     user_id = Column(UUID(as_uuid=True), ForeignKey("public.users.id"), nullable=True)
     status = Column(Enum("pending", "running", "done", "failed", "cancelled", name="run_status"), default="pending")
+    cancel_requested = Column(Boolean, default=False)
     triggered_at = Column(DateTime(timezone=True), default=utcnow)
     completed_at = Column(DateTime(timezone=True), nullable=True)
 
@@ -90,7 +91,7 @@ class VaultDocument(Base):
     user_id = Column(UUID(as_uuid=True), ForeignKey("public.users.id"), nullable=False)
     name = Column(String, nullable=False)
     tag = Column(Enum(
-        "legal", "tax", "cv", "financial", "organizational", "other",
+        "legal", "tax", "cv", "financial", "organizational", "proposal", "other",
         name="document_tag"
     ), nullable=False)
     gcs_path = Column(String, nullable=False)
@@ -121,6 +122,7 @@ class ApplicationTracker(Base):
         ),
         default="pending"
     )
+    cancel_requested = Column(Boolean, default=False)
     outline_gcs_path = Column(String, nullable=True)  # AG3 output
     proposal_gcs_path = Column(String, nullable=True)  # AG4 output
     budget_gcs_path = Column(String, nullable=True)  # AG4 budget output

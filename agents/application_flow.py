@@ -43,12 +43,11 @@ def save_draft(response: str, gcs_path: str, fallback_key: str, title: str) -> N
     )
 
 
-def _build_vault_context(user_id: str, db: Session):
-    vault_docs = db.query(VaultDocument).filter_by(user_id=user_id).all()
-    return [
-        {"name": doc.name, "tag": doc.tag, "gcs_path": doc.gcs_path}
-        for doc in vault_docs
-    ]
+from utils.rag_engine import retrieve_relevant_vault_context
+
+
+def _build_vault_context(user_id: str, grant_query: str, db: Session):
+    return retrieve_relevant_vault_context(user_id=user_id, grant_query=grant_query, db=db, top_k=5)
 
 
 async def _generate_outline_job(application_id: str, user_id: str):
@@ -56,7 +55,13 @@ async def _generate_outline_job(application_id: str, user_id: str):
     db = SessionLocal()
     application = db.query(ApplicationTracker).filter_by(id=application_id).first()
     try:
-        vault_context = _build_vault_context(user_id, db)
+        if application.cancel_requested:
+            application.status = "cancelled"
+            db.commit()
+            return
+
+        grant_query = f"{application.grant.name} {application.grant.description or ''}"
+        vault_context = _build_vault_context(user_id, grant_query, db)
         prompt = f"""
             Start application flow for this grant:
             Grant: {application.grant.name}
@@ -65,7 +70,7 @@ async def _generate_outline_job(application_id: str, user_id: str):
             Description: {application.grant.description}
             Link: {application.grant.link}
 
-            Organization vault documents available:
+            Most relevant organization vault document passages:
             {json.dumps(vault_context)}
 
             Generate a proposal outline.
@@ -78,6 +83,12 @@ async def _generate_outline_job(application_id: str, user_id: str):
             user_id=user_id,
             session_id=application_id
         )
+
+        db.refresh(application)
+        if application.cancel_requested:
+            application.status = "cancelled"
+            db.commit()
+            return
 
         log_agent_step(user_id, application_id, "Outline draft complete — writing it to storage")
 
@@ -109,14 +120,20 @@ async def _generate_proposal_job(application_id: str, user_id: str):
     db = SessionLocal()
     application = db.query(ApplicationTracker).filter_by(id=application_id).first()
     try:
-        vault_context = _build_vault_context(user_id, db)
+        if application.cancel_requested:
+            application.status = "cancelled"
+            db.commit()
+            return
+
+        grant_query = f"{application.grant.name} {application.grant.description or ''}"
+        vault_context = _build_vault_context(user_id, grant_query, db)
         prompt = f"""
             The user has approved the proposal outline.
             Outline is stored at: {application.outline_gcs_path}
 
             Now write the full grant proposal and budget.
             Grant: {application.grant.name}
-            Organization vault documents: {json.dumps(vault_context)}
+            Most relevant organization vault document passages: {json.dumps(vault_context)}
 
             Return proposal text and itemized budget.
         """
@@ -128,6 +145,12 @@ async def _generate_proposal_job(application_id: str, user_id: str):
             user_id=user_id,
             session_id=application_id
         )
+
+        db.refresh(application)
+        if application.cancel_requested:
+            application.status = "cancelled"
+            db.commit()
+            return
 
         log_agent_step(user_id, application_id, "Proposal draft complete — writing it to storage")
 

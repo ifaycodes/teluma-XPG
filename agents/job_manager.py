@@ -9,6 +9,11 @@ logger = logging.getLogger(__name__)
 _tasks: dict[str, asyncio.Task] = {}
 
 
+from database import SessionLocal
+from models import AgentRun, ApplicationTracker
+import uuid
+
+
 def start_job(job_id: str, coro: Coroutine) -> asyncio.Task:
     """Schedule a coroutine as a trackable, cancellable background task."""
     task = asyncio.create_task(coro)
@@ -26,14 +31,64 @@ def start_job(job_id: str, coro: Coroutine) -> asyncio.Task:
 
 
 def cancel_job(job_id: str) -> bool:
-    """Request cancellation of a running job. Returns True if a live task was found."""
+    """Request cancellation of a running job. Cancels local task if present and sets DB flags."""
     task = _tasks.get(job_id)
+    cancelled_local = False
     if task and not task.done():
         task.cancel()
-        return True
-    return False
+        cancelled_local = True
+
+    # Persist cancellation flag in DB for cross-worker & process safety
+    db = SessionLocal()
+    db_updated = False
+    try:
+        try:
+            uid = uuid.UUID(job_id)
+        except (ValueError, TypeError):
+            uid = None
+
+        if uid:
+            run = db.query(AgentRun).filter_by(id=uid).first()
+            if run and run.status in ("pending", "running"):
+                run.cancel_requested = True
+                run.status = "cancelled"
+                db_updated = True
+
+            app = db.query(ApplicationTracker).filter_by(id=uid).first()
+            if app and app.status in ("outline_in_progress", "proposal_in_progress"):
+                app.cancel_requested = True
+                app.status = "cancelled"
+                db_updated = True
+
+            db.commit()
+    except Exception as e:
+        logger.error(f"Failed to set DB cancellation flag for {job_id}: {e}")
+    finally:
+        db.close()
+
+    return cancelled_local or db_updated
 
 
 def is_running(job_id: str) -> bool:
     task = _tasks.get(job_id)
-    return task is not None and not task.done()
+    if task is not None and not task.done():
+        return True
+
+    db = SessionLocal()
+    try:
+        try:
+            uid = uuid.UUID(job_id)
+        except (ValueError, TypeError):
+            return False
+
+        run = db.query(AgentRun).filter_by(id=uid).first()
+        if run and run.status in ("pending", "running") and not run.cancel_requested:
+            return True
+
+        app = db.query(ApplicationTracker).filter_by(id=uid).first()
+        if app and app.status in ("outline_in_progress", "proposal_in_progress") and not app.cancel_requested:
+            return True
+    finally:
+        db.close()
+
+    return False

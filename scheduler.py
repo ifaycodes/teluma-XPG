@@ -16,14 +16,7 @@ async def run_discovery():
     db = SessionLocal()
     run = None
     try:
-        # clean out expired grants
         now = datetime.now(timezone.utc)
-        expired = db.query(Grant).filter(Grant.deadline < now).all()
-        for grant in expired:
-            db.query(UserGrant).filter(UserGrant.grant_id == grant.id).delete()
-            db.delete(grant)
-        db.commit()
-        logger.info(f"Cleaned up {len(expired)} expired Grants")
 
         # create a system-level run log
         run = AgentRun(

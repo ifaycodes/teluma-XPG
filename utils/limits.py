@@ -2,31 +2,31 @@ from fastapi import HTTPException
 
 PLAN_LIMITS = {
     "free": {
-        "feed_grants": 10,
-        "vault_documents": 3,
-        "storage_bytes": 10485760, # 10MB
-        "num_of_drafts": 2,
+        "feed_grants": 10,          # 10 matched grants max to protect grant names from search bypass
+        "vault_documents": 3,       # 3 core Vault documents
+        "storage_bytes": None,
+        "num_of_drafts": 1,         # 1 sample AI-drafted proposal total
         "can_apply": True,
     },
     "basic": {
-        "feed_grants": None,        # unlimited
-        "vault_documents": 20,
-        "storage_bytes": 524288000, # 500MB
-        "num_of_drafts": 10,
+        "feed_grants": None,        # unlimited feed matches
+        "vault_documents": 10,      # 10 Vault documents
+        "storage_bytes": None,
+        "num_of_drafts": 5,         # 5 proposals/mo
         "can_apply": True,
     },
     "pro": {
-        "feed_grants": None,
-        "vault_documents": None,
-        "storage_bytes": 5368709120,  # 5GB
-        "num_of_drafts": None,  # unlimited
+        "feed_grants": None,        # unlimited feed matches
+        "vault_documents": 50,      # 50 Vault documents
+        "storage_bytes": None,
+        "num_of_drafts": None,      # unlimited proposals
         "can_apply": True,
     },
     "enterprise": {
-        "feed_grants": None,
-        "vault_documents": None,
-        "storage_bytes": None,       # unlimited
-        "num_of_drafts": None,
+        "feed_grants": None,        # unlimited feed matches
+        "vault_documents": None,    # unlimited Vault documents
+        "storage_bytes": None,      # unlimited
+        "num_of_drafts": None,      # unlimited proposals
         "can_apply": True,
     }
 }

@@ -96,9 +96,9 @@ def generate_grants_pdf(grants: dict, user_name: str) -> bytes:
     pdf.ln(5)
 
     categories = {
-        "recommended": "Recommended",
-        "strong_fit": "Strong Fit",
-        "not_qualified": "Not Qualified"
+        "prime_match": "Prime Match",
+        "moderate_fit": "Moderate Fit",
+        "low_probability": "Low Probability"
     }
 
     for key, label in categories.items():

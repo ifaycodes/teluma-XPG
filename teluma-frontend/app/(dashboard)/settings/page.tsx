@@ -241,10 +241,10 @@ export default function SettingsPage() {
                     >
                       <h4 className="font-bold text-sm mb-1">{tier.name}</h4>
                       <div className="mb-1">
-                        <span className="text-xl font-black">{tier.priceNgn}</span>
+                        <span className="text-xl font-black">{tier.priceUsd}</span>
                         <span className={`text-xs ml-1 ${tier.highlighted ? 'text-[#FDFAF4]/70' : 'text-[#2C1A0E]/50'}`}>/mo</span>
                       </div>
-                      <p className={`text-xs mb-3 ${tier.highlighted ? 'text-[#FDFAF4]/60' : 'text-[#2C1A0E]/40'}`}>{tier.priceUsd}</p>
+                      <p className={`text-xs mb-3 ${tier.highlighted ? 'text-[#FDFAF4]/60' : 'text-[#2C1A0E]/40'}`}>{tier.priceNgn}</p>
                       <ul className="space-y-1.5 mb-4 flex-1">
                         {tier.features.map((f) => (
                           <li key={f} className={`text-xs flex items-start gap-1.5 ${tier.highlighted ? 'text-[#FDFAF4]/80' : 'text-[#2C1A0E]/70'}`}>
