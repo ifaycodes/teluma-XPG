@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" width="128" height="128">
+  <defs>
+    <linearGradient id="crimsonBg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#C21E36" />
+      <stop offset="100%" stop-color="#8F1526" />
+    </linearGradient>
+  </defs>
+  <rect x="8" y="8" width="112" height="112" rx="28" fill="url(#crimsonBg)"/>
+  <path d="M 36 34 H 92 C 95 34 97 36 97 39 V 47 C 97 50 95 52 92 52 H 71 V 89 C 71 93 68 96 64 96 H 64 C 60 96 57 93 57 89 V 52 H 36 C 33 52 31 50 31 47 V 39 C 31 36 33 34 36 34 Z" fill="#FDFAF4"/>
+</svg>
