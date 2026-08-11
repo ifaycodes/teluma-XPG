@@ -1,21 +1,21 @@
 'use client'
 import { useState } from 'react'
-import { supabase } from '@/lib/supabase'
 import { useRouter } from 'next/navigation'
-import api from '@/lib/api'
+import { supabase } from '@/lib/supabase'
 import { OFFSET, OFFSET_BTN } from '@/lib/theme'
+import TelumaLogo from '@/components/Logo'
 
 export default function LoginPage() {
   const router = useRouter()
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
-  const [error, setError] = useState('')
+  const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
 
   async function handleLogin(e: React.FormEvent) {
     e.preventDefault()
     setLoading(true)
-    setError('')
+    setError(null)
 
     const { error } = await supabase.auth.signInWithPassword({ email, password })
 
@@ -25,13 +25,6 @@ export default function LoginPage() {
       return
     }
 
-    // ensure a matching row exists in our own users table before entering the app
-    try {
-      await api.post('/user/me')
-    } catch (err) {
-      console.error('Failed to sync profile:', err)
-    }
-
     router.push('/feed')
   }
 
@@ -39,12 +32,10 @@ export default function LoginPage() {
     <div className="min-h-screen bg-[#F5F0E8] flex items-center justify-center px-4">
       <div className={`bg-[#FDFAF4] border border-[#1C1C1C]/10 rounded-2xl p-8 w-full max-w-md ${OFFSET}`}>
         <div className="flex items-center gap-3 mb-8">
-          <div className="w-10 h-10 rounded-lg bg-[#A8192E] flex items-center justify-center">
-            <span className="text-[#FDFAF4] text-xl">T</span>
-          </div>
+          <TelumaLogo size={40} />
           <div>
             <h1 className="font-bold text-xl text-[#1C1C1C]">Teluma</h1>
-            <p className="text-xs text-[#2C1A0E]/60">Strategic Grant Intelligence</p>
+            <p className="text-xs text-[#2C1A0E]/60">Unlocking Non-Dilutive Capital on Autopilot</p>
           </div>
         </div>
 

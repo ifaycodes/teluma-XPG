@@ -6,6 +6,7 @@ import Link from 'next/link'
 import api from '@/lib/api'
 import { NotificationBell } from '@/components/ui/NotificationBell'
 import { PlanPickerModal } from '@/components/ui/PlanPickerModal'
+import TelumaLogo from '@/components/Logo'
 
 const navItems = [
   { href: '/feed', label: 'Feed', icon: 'rss_feed' },
@@ -89,9 +90,7 @@ export default function DashboardLayout({
         onClick={() => setPinned((p) => !p)}
         className="mb-10 flex items-center gap-3 w-full"
       >
-        <div className="w-10 h-10 rounded-lg bg-[#A8192E] flex items-center justify-center flex-shrink-0">
-          <span className="text-[#FDFAF4] font-bold text-lg">T</span>
-        </div>
+        <TelumaLogo size={40} />
         <div className={`text-left ${labelClass}`}>
           <h1 className="font-bold text-lg text-[#FDFAF4] whitespace-nowrap">Teluma</h1>
           <p className="text-xs text-[#FDFAF4]/50 whitespace-nowrap">Strategic Impact</p>

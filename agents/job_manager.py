@@ -1,17 +1,15 @@
 import asyncio
 import logging
 from typing import Coroutine
+from database import SessionLocal
+from models import AgentRun, ApplicationTracker
+import uuid
 
 logger = logging.getLogger(__name__)
 
 # In-memory only — lost on restart, not shared across worker processes.
 # Fine for a single-process dev backend; see project notes before scaling out.
 _tasks: dict[str, asyncio.Task] = {}
-
-
-from database import SessionLocal
-from models import AgentRun, ApplicationTracker
-import uuid
 
 
 def start_job(job_id: str, coro: Coroutine) -> asyncio.Task:

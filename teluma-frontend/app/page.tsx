@@ -2,6 +2,7 @@
 import { useState } from 'react'
 import Link from 'next/link'
 import { OFFSET, OFFSET_HOVER, OFFSET_BTN } from '@/lib/theme'
+import TelumaLogo from '@/components/Logo'
 
 const PROBLEMS = [
   {
@@ -141,9 +142,7 @@ export default function HomePage() {
       {/* Nav */}
       <header className="flex items-center justify-between px-6 lg:px-10 py-5 max-w-7xl mx-auto">
         <div className="flex items-center gap-3">
-          <div className="w-9 h-9 rounded-lg bg-[#A8192E] flex items-center justify-center">
-            <span className="text-[#FDFAF4] text-lg font-bold">T</span>
-          </div>
+          <TelumaLogo size={36} />
           <span className="font-bold text-lg text-[#1C1C1C]">Teluma</span>
         </div>
         <div className="flex items-center gap-1 sm:gap-3">

@@ -12,6 +12,8 @@ from utils.parsing import extract_json
 from utils.pdf_generator import render_document_pdf
 from utils.notify import notify
 
+from utils.rag_engine import retrieve_relevant_vault_context
+
 
 def parse_draft(response: str, fallback_key: str) -> dict:
     try:
@@ -41,9 +43,6 @@ def save_draft(response: str, gcs_path: str, fallback_key: str, title: str) -> N
         bucket_name=GCS_BUCKET_AGENT,
         content_type="application/pdf"
     )
-
-
-from utils.rag_engine import retrieve_relevant_vault_context
 
 
 def _build_vault_context(user_id: str, grant_query: str, db: Session):

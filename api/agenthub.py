@@ -4,6 +4,11 @@ from database import get_db
 from models import AgentRun, ActivityLog
 from auth import verify_token
 
+import asyncio
+import json
+from fastapi.responses import StreamingResponse
+from database import SessionLocal
+
 router = APIRouter(prefix="/agents", tags=["agents"])
 
 
@@ -55,12 +60,6 @@ def get_agent_history(
         }
         for run in completed_runs
     ]
-
-
-import asyncio
-import json
-from fastapi.responses import StreamingResponse
-from database import SessionLocal
 
 
 @router.get("/{run_id}/steps")
