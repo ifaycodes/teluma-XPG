@@ -5,7 +5,7 @@ import { VaultDocument, StorageInfo } from '@/lib/types'
 import { EmptyState } from '@/components/ui/EmptyState'
 import { OFFSET, OFFSET_BTN } from '@/lib/theme'
 
-const TAGS = ['legal', 'tax', 'cv', 'financial', 'organizational', 'other']
+const TAGS = ['legal', 'tax', 'cv', 'financial', 'organizational', 'proposal', 'other']
 
 function formatSize(bytes: number) {
   if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)}KB`
@@ -19,6 +19,7 @@ function TagBadge({ tag }: { tag: string }) {
     cv: 'bg-purple-50 text-purple-700',
     financial: 'bg-green-50 text-green-700',
     organizational: 'bg-orange-50 text-orange-700',
+    proposal: 'bg-green-50 text-green-700',
     other: 'bg-[#1C1C1C]/5 text-[#2C1A0E]/60',
   }
   return (

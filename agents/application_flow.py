@@ -26,8 +26,7 @@ def parse_draft(response: str, fallback_key: str) -> dict:
 
 
 def save_draft(response: str, gcs_path: str, fallback_key: str, title: str) -> None:
-    """Persist both the raw JSON (used to re-hydrate the Agent Draft panel)
-    and a rendered PDF (used for the actual downloadable file)."""
+    """keep the raw JSON (used for the Agent Draft panel) and a rendered PDF (used for the downloadable file)."""
     upload_file(
         contents=response.encode(),
         destination_path=gcs_path,
@@ -178,17 +177,13 @@ async def _generate_proposal_job(application_id: str, user_id: str):
 
 
 def start_proposal_generation(application: ApplicationTracker, user_id: str) -> None:
-    """Kick off AG4 as a cancellable background job. Caller is responsible for
-    setting application.status = "proposal_in_progress" and committing first."""
+    """Kick off AG4 as a cancellable background job. Caller sets  application.status = "proposal_in_progress" and committing."""
     job_manager.start_job(str(application.id), _generate_proposal_job(str(application.id), user_id))
 
 
 async def start_application(grant, user_id: str, db: Session) -> ApplicationTracker:
-    """Create (or reuse) an application for this grant and kick off outline
-    generation as a cancellable background job.
-
-    Shared by feeds.py and hub.py so both "Apply" entry points behave
-    identically and don't drift into inconsistent duplicate implementations.
+    """Create an application for this grant and kick off outline generation as a cancellable background job.
+    Shared by feeds.py and hub.py so both "Apply" entry points behave identically and avoid inconsistent duplicate implementations.
     """
     existing = db.query(ApplicationTracker).filter(
         ApplicationTracker.user_id == user_id,

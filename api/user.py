@@ -92,8 +92,16 @@ def get_dashboard(
 
     total_grants = db.query(UserGrant).filter_by(user_id=user_id).count()
 
-    pending = db.query(ApplicationTracker).filter_by(
-        user_id=user_id, status="pending"
+    pending_statuses = [
+        "pending",
+        "outline_in_progress",
+        "outline_review",
+        "proposal_in_progress",
+        "proposal_review",
+    ]
+
+    pending = db.query(ApplicationTracker).filter(
+        ApplicationTracker.user_id == user_id, ApplicationTracker.status.in_(pending_statuses)
     ).count()
 
     submitted = db.query(ApplicationTracker).filter_by(

@@ -155,7 +155,7 @@ export default function SupportPage() {
       <div className={`mt-6 bg-[#FDFAF4] border border-[#1C1C1C]/10 rounded-xl p-5 text-center ${OFFSET}`}>
         <span className="material-symbols-outlined text-3xl text-[#2C1A0E]/40 mb-2 block">forum</span>
         <p className="text-sm text-[#2C1A0E]/60">
-          Still stuck? Reach out to your workspace administrator for further help.
+          Still stuck? Reach out to support@teluma.live for further help.
         </p>
       </div>
     </div>

@@ -5,8 +5,8 @@ from typing import Optional
 
 
 def extract_json(text: str):
-    """Parse a JSON value out of LLM output, tolerating markdown code fences
-    and leading/trailing prose the model added despite instructions not to."""
+    """Parse LLM JSON output, tolerating mark down code fences
+    and leading/trailing prose the model possibly added despite instructions not to."""
     text = text.strip()
     fence_match = re.search(r"```(?:json)?\s*(.*?)\s*```", text, re.DOTALL)
     if fence_match:
@@ -20,7 +20,7 @@ def extract_json(text: str):
 
 
 def parse_deadline(value) -> Optional[datetime]:
-    """Best-effort parse of an LLM-provided deadline string into a UTC datetime.
+    """Parse of provided deadline string into a UTC datetime.
     Returns None if the value is missing or unparseable, rather than raising."""
     if not value or not isinstance(value, str):
         return None
